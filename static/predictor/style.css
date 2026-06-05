@@ -85,8 +85,13 @@ th, td { text-align: left; padding: 0.4rem 0.6rem; border-bottom: 1px solid var(
 th { color: var(--muted); font-weight: 500; }
 
 .recent { margin-top: 2.5rem; }
+.recent-hint { color: var(--muted); font-size: 0.8rem; margin: 0 0 0.5rem; }
 .recent ul { list-style: none; padding: 0; }
 .recent li { padding: 0.4rem 0; border-bottom: 1px solid var(--line); font-size: 0.9rem; }
+.recent-item { cursor: pointer; border-radius: 4px; transition: background 0.12s; }
+.recent-item:hover, .recent-item:focus {
+    background: #1b1f27; outline: none; padding-left: 0.4rem; padding-right: 0.4rem;
+}
 .badge {
     display: inline-block; background: var(--accent); color: #fff;
     border-radius: 4px; padding: 0.05rem 0.4rem; font-size: 0.8rem; margin-right: 0.4rem;

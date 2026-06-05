@@ -53,12 +53,39 @@
 {% if recent %}
     <section class="recent">
         <h3>Recent predictions</h3>
+        <p class="recent-hint">Click a row to load those teams into the form.</p>
         <ul>
         {% for p in recent %}
-            <li><span class="badge">{{ p.favored }} {% widthratio p.confidence 1 100 %}%</span>
+            <li class="recent-item" role="button" tabindex="0"
+                data-team-a="{{ p.team_a }}" data-team-b="{{ p.team_b }}">
+                <span class="badge">{{ p.favored }} {% widthratio p.confidence 1 100 %}%</span>
                 {{ p.team_a }} <em>vs</em> {{ p.team_b }}</li>
         {% endfor %}
         </ul>
     </section>
 {% endif %}
+
+<script>
+(function () {
+    function fillTeams(item) {
+        var sides = {a: item.dataset.teamA, b: item.dataset.teamB};
+        Object.keys(sides).forEach(function (side) {
+            var names = sides[side].split(",").map(function (n) { return n.trim(); });
+            names.forEach(function (name, idx) {
+                var input = document.getElementById("id_" + side + (idx + 1));
+                if (input) { input.value = name; }
+            });
+        });
+        var form = document.querySelector(".match-form");
+        if (form) { form.scrollIntoView({behavior: "smooth", block: "start"}); }
+    }
+
+    document.querySelectorAll(".recent-item").forEach(function (item) {
+        item.addEventListener("click", function () { fillTeams(item); });
+        item.addEventListener("keydown", function (e) {
+            if (e.key === "Enter" || e.key === " ") { e.preventDefault(); fillTeams(item); }
+        });
+    });
+})();
+</script>
 {% endblock %}
