@@ -1,0 +1,20 @@
+# Secrets
+.env
+
+# Python
+__pycache__/
+*.pyc
+.venv/
+venv/
+
+# Django
+db.sqlite3
+
+# Data: ignore raw + processed, but keep the small demo model & dataset
+# so the repo is runnable and results are reproducible out of the box.
+data/raw/*
+data/processed/*
+!data/raw/.gitkeep
+!data/processed/.gitkeep
+!data/processed/best_model.joblib
+!data/processed/matches.csv
