@@ -1,0 +1,64 @@
+{% extends "predictor/base.html" %}
+
+{% block content %}
+<form method="post" class="match-form">
+    {% csrf_token %}
+    <div class="teams">
+        <div class="team">
+            <h2>Team A</h2>
+            {% for field in form.team_a_fields %}
+                <div class="field">{{ field }}{{ field.errors }}</div>
+            {% endfor %}
+        </div>
+        <div class="team">
+            <h2>Team B</h2>
+            {% for field in form.team_b_fields %}
+                <div class="field">{{ field }}{{ field.errors }}</div>
+            {% endfor %}
+        </div>
+    </div>
+    <button type="submit">Predict winner</button>
+</form>
+
+{% if error %}
+    <div class="error"><strong>Couldn't predict:</strong><pre>{{ error }}</pre></div>
+{% endif %}
+
+{% if result %}
+    <section class="result">
+        {% if result.coin_flip %}
+            <p class="verdict toss">Too close to call — essentially a coin flip
+                ({{ result.prob_a_pct }}% Team A).</p>
+        {% else %}
+            <p class="verdict">{{ result.favored }} favored —
+                <strong>{{ result.confidence_pct }}%</strong> confidence</p>
+        {% endif %}
+
+        <div class="bar"><div class="bar-fill" style="width: {{ result.prob_a_pct }}%"></div></div>
+        <p class="bar-label">Team A win probability: {{ result.prob_a_pct }}%</p>
+
+        <h3>Team averages (recent form)</h3>
+        <table>
+            <thead><tr><th>Metric</th><th>Team A</th><th>Team B</th></tr></thead>
+            <tbody>
+            {% for row in result.rows %}
+                <tr><td>{{ row.metric }}</td><td>{{ row.a|floatformat:2 }}</td>
+                    <td>{{ row.b|floatformat:2 }}</td></tr>
+            {% endfor %}
+            </tbody>
+        </table>
+    </section>
+{% endif %}
+
+{% if recent %}
+    <section class="recent">
+        <h3>Recent predictions</h3>
+        <ul>
+        {% for p in recent %}
+            <li><span class="badge">{{ p.favored }} {% widthratio p.confidence 1 100 %}%</span>
+                {{ p.team_a }} <em>vs</em> {{ p.team_b }}</li>
+        {% endfor %}
+        </ul>
+    </section>
+{% endif %}
+{% endblock %}
