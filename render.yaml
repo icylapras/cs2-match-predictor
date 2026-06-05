@@ -1,0 +1,20 @@
+# Render Blueprint — defines the web service so a deploy is reproducible.
+# In Render: New + -> Blueprint -> pick this repo, and it reads this file.
+services:
+  - type: web
+    name: cs2-match-predictor
+    runtime: python
+    plan: free
+    buildCommand: "./build.sh"
+    startCommand: "gunicorn config.wsgi:application"
+    envVars:
+      - key: PYTHON_VERSION
+        value: "3.12.4"
+      - key: DJANGO_DEBUG
+        value: "0"
+      - key: DJANGO_SECRET_KEY
+        generateValue: true        # Render generates a strong secret for you
+      - key: FACEIT_API_KEY
+        sync: false                # set this yourself in the dashboard (secret)
+      - key: DJANGO_CSRF_TRUSTED_ORIGINS
+        sync: false                # set to https://<your-app>.onrender.com after first deploy

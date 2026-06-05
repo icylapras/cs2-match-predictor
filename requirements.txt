@@ -5,3 +5,7 @@ requests
 streamlit
 python-dotenv
 django
+gunicorn
+whitenoise
+dj-database-url
+psycopg[binary]
