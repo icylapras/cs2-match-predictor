@@ -66,13 +66,23 @@ def _get(session: requests.Session, path: str, params: dict[str, Any] | None = N
     raise FaceitError(f"Rate-limited repeatedly on {path}; giving up.")
 
 
-def get_player_id(username: str, session: requests.Session) -> str:
-    """Resolve a FACEIT nickname to its internal player_id."""
+def get_player_profile(username: str, session: requests.Session) -> dict[str, Any]:
+    """Resolve a nickname to its player_id and current FACEIT Elo in one call.
+
+    The /players response carries the live Elo under games.cs2.faceit_elo, so
+    we get it for free alongside the id (no extra request).
+    """
     data = _get(session, "/players", params={"nickname": username, "game": GAME_ID})
     player_id = data.get("player_id")
     if not player_id:
         raise FaceitError(f"Could not resolve player_id for '{username}'.")
-    return player_id
+    elo = data.get("games", {}).get(GAME_ID, {}).get("faceit_elo")
+    return {"player_id": player_id, "elo": _to_float(elo)}
+
+
+def get_player_id(username: str, session: requests.Session) -> str:
+    """Resolve a FACEIT nickname to its internal player_id."""
+    return get_player_profile(username, session)["player_id"]
 
 
 def _to_float(value: Any) -> float:
@@ -156,18 +166,24 @@ def get_player_stats(
 ) -> dict[str, Any]:
     """Fetch the last ``limit`` CS2 matches for ``username`` and aggregate stats.
 
-    Returns a dict with keys: username, player_id, matches, kd, adr,
+    Returns a dict with keys: username, player_id, elo, matches, kd, adr,
     hs_percent, win_rate. Used at prediction time (most recent form).
 
     Raises FaceitError if the player can't be found or has no recent matches.
     """
     session = _session(api_key)
-    player_id = get_player_id(username, session)
+    profile = get_player_profile(username, session)
+    player_id = profile["player_id"]
     items = get_match_stats_items(player_id, session, limit=limit)
     if not items:
         raise FaceitError(f"No recent {GAME_ID} matches found for '{username}'.")
 
-    return {"username": username, "player_id": player_id, **aggregate_stats(items)}
+    return {
+        "username": username,
+        "player_id": player_id,
+        "elo": profile["elo"],
+        **aggregate_stats(items),
+    }
 
 
 if __name__ == "__main__":

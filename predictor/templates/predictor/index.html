@@ -41,8 +41,16 @@
                 <strong>{{ result.confidence_pct }}%</strong> confidence</p>
         {% endif %}
 
+        <p class="bar-heading">Your model</p>
         <div class="bar"><div class="bar-fill" style="width: {{ result.prob_a_pct }}%"></div></div>
         <p class="bar-label">Team A win probability: {{ result.prob_a_pct }}%</p>
+
+        {% if result.elo %}
+        <p class="bar-heading">FACEIT Elo <span class="bar-sub">— raw rating, no model</span></p>
+        <div class="bar"><div class="bar-fill elo" style="width: {{ result.elo.prob_a_pct }}%"></div></div>
+        <p class="bar-label">Team A win probability: {{ result.elo.prob_a_pct }}%
+            · avg Elo {{ result.elo.elo_a }} vs {{ result.elo.elo_b }}</p>
+        {% endif %}
 
         <h3>Team averages (recent form)</h3>
         <table>

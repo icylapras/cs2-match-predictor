@@ -21,6 +21,21 @@ def team_average(player_stats: list[dict]) -> dict[str, float]:
     return {key: sum(p[key] for p in player_stats) / n for key in FEATURE_KEYS}
 
 
+def team_elo(player_stats: list[dict]) -> float:
+    """Average current FACEIT Elo across a team (0 if unavailable)."""
+    elos = [p.get("elo") or 0.0 for p in player_stats]
+    return sum(elos) / len(elos) if elos else 0.0
+
+
+def elo_win_probability(elo_a: float, elo_b: float) -> float:
+    """Standard Elo expected score: P(team A wins) on the 400-point logistic scale.
+
+    This is FACEIT's own rating used directly as a baseline — no model, just
+    the raw skill numbers — to compare against the trained model's output.
+    """
+    return 1.0 / (1.0 + 10 ** ((elo_b - elo_a) / 400.0))
+
+
 def team_diff(avg_a: dict[str, float], avg_b: dict[str, float]) -> dict[str, float]:
     """Team-A-minus-team-B difference per metric, as {kd_diff, adr_diff, ...}.
 

@@ -19,7 +19,13 @@ import joblib
 import pandas as pd
 
 from src.faceit_api import FaceitError, get_player_stats
-from src.features import FEATURE_KEYS, team_average, team_diff
+from src.features import (
+    FEATURE_KEYS,
+    elo_win_probability,
+    team_average,
+    team_diff,
+    team_elo,
+)
 
 DEFAULT_MODEL = Path("data/processed/best_model.joblib")
 FEATURE_COLS = [f"{key}_diff" for key in FEATURE_KEYS]
@@ -52,7 +58,21 @@ def predict_from_stats(a_stats: list[dict], b_stats: list[dict], model) -> dict:
     vector = team_diff(avg_a, avg_b)
     x = pd.DataFrame([vector])[FEATURE_COLS]
     prob_a = float(model.predict_proba(x)[0, 1])
-    return {"prob_a": prob_a, "vector": vector, "avg_a": avg_a, "avg_b": avg_b}
+
+    # FACEIT Elo baseline: a model-free prediction from the raw ratings, for
+    # side-by-side comparison. None if Elo is missing for either team.
+    elo_a, elo_b = team_elo(a_stats), team_elo(b_stats)
+    prob_a_elo = elo_win_probability(elo_a, elo_b) if (elo_a and elo_b) else None
+
+    return {
+        "prob_a": prob_a,
+        "vector": vector,
+        "avg_a": avg_a,
+        "avg_b": avg_b,
+        "prob_a_elo": prob_a_elo,
+        "elo_a": elo_a,
+        "elo_b": elo_b,
+    }
 
 
 def predict_match(
