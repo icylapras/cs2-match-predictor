@@ -251,7 +251,10 @@ def snowball_crawl(
                     match = _get(session, f"/matches/{mid}")
                 except FaceitError:
                     continue
-                row = build_row(match, cache, window=window, min_history=min_history)
+                try:
+                    row = build_row(match, cache, window=window, min_history=min_history)
+                except FaceitError:
+                    row = None  # a player's stats fetch failed — skip this row, keep crawling
                 if row is not None:
                     rows.append(row)
                 # expand the frontier with everyone in this match

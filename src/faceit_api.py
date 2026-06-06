@@ -49,11 +49,18 @@ def _session(api_key: str | None = None) -> requests.Session:
 def _get(session: requests.Session, path: str, params: dict[str, Any] | None = None) -> dict:
     """GET a FACEIT endpoint and return the decoded JSON body.
 
-    Retries with backoff on 429 (rate limit), which matters when the dataset
-    builder fans out across hundreds of players.
+    Retries with backoff on 429 (rate limit) AND on transient network errors
+    (read timeouts / dropped connections), which matters for long crawls that
+    fan out across thousands of players — a single blip shouldn't kill the run.
     """
-    for attempt in range(4):
-        resp = session.get(f"{API_BASE}{path}", params=params, timeout=TIMEOUT)
+    for attempt in range(5):
+        try:
+            resp = session.get(f"{API_BASE}{path}", params=params, timeout=TIMEOUT)
+        except requests.exceptions.RequestException as exc:
+            if attempt == 4:
+                raise FaceitError(f"Network error on {path}: {exc}")
+            time.sleep(2 ** attempt)  # 1s, 2s, 4s, 8s
+            continue
         if resp.status_code == 429:
             time.sleep(2 ** attempt)  # 1s, 2s, 4s, 8s
             continue
@@ -63,7 +70,7 @@ def _get(session: requests.Session, path: str, params: dict[str, Any] | None = N
             raise FaceitError("Unauthorized — check that FACEIT_API_KEY is valid.")
         resp.raise_for_status()
         return resp.json()
-    raise FaceitError(f"Rate-limited repeatedly on {path}; giving up.")
+    raise FaceitError(f"Repeated failures on {path}; giving up.")
 
 
 def get_player_profile(username: str, session: requests.Session) -> dict[str, Any]:
