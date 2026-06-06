@@ -37,6 +37,7 @@ import json
 
 from sklearn.calibration import CalibratedClassifierCV
 from sklearn.isotonic import IsotonicRegression
+from sklearn.model_selection import TimeSeriesSplit
 from sklearn.pipeline import make_pipeline
 from sklearn.preprocessing import StandardScaler
 from scipy.stats import norm
@@ -489,6 +490,61 @@ def calibration_report(
         print(f"\nReliability diagram -> {out_png}")
 
 
+def walk_forward(
+    data: Path, features: Path, *, n_splits: int = 8, calibrated: bool = True
+) -> None:
+    """Expanding-window (walk-forward) backtest — the rigorous version of a split.
+
+    Instead of one 80/20 cut, we repeatedly train on all matches up to a point
+    and predict the *next* block, sliding forward (sklearn TimeSeriesSplit). Every
+    fold's predictions are out-of-sample, so pooling them tests the model on far
+    more matches (~n*(n_splits)/(n_splits+1)) than a single split — much tighter
+    error bars and a more realistic 'always predict the future from the past'.
+    """
+    cols = STAT_COLS + FACEIT_COL
+    df = pd.read_csv(data).merge(pd.read_csv(features), on="match_id", how="inner")
+    df["date"] = pd.to_datetime(df["date"])
+    df = df.sort_values(["date", "match_id"]).reset_index(drop=True)
+    y = df["label"].to_numpy()
+
+    tscv = TimeSeriesSplit(n_splits=n_splits)
+    ys, p_model_parts, p_elo_parts, fold_aucs = [], [], [], []
+    for tr, te in tscv.split(df):
+        if calibrated:
+            model = CalibratedClassifierCV(
+                make_pipeline(StandardScaler(), LogisticRegression(max_iter=1000)),
+                method="isotonic", cv=5,
+            )
+        else:
+            model = make_pipeline(StandardScaler(), LogisticRegression(max_iter=1000))
+        model.fit(df.iloc[tr][cols], y[tr])
+        pm = model.predict_proba(df.iloc[te][cols])[:, 1]
+        sub = df.iloc[te]
+        pe = sub.apply(
+            lambda r: elo_win_probability(r["faceit_elo_a"], r["faceit_elo_b"]), axis=1
+        ).to_numpy()
+        ys.append(y[te]); p_model_parts.append(pm); p_elo_parts.append(pe)
+        fold_aucs.append(_auc(y[te], pm))
+
+    y_oos = np.concatenate(ys)
+    p_model = np.concatenate(p_model_parts)
+    p_elo = np.concatenate(p_elo_parts)
+
+    print("\n" + "=" * 78)
+    print(f"WALK-FORWARD BACKTEST — {n_splits} expanding folds, "
+          f"{len(y_oos)} out-of-sample predictions pooled")
+    print("=" * 78)
+    print("  per-fold model AUC: " + "  ".join(f"{a:.3f}" for a in fold_aucs))
+    for name, p in (("Our model", p_model), ("FACEIT Elo formula", p_elo)):
+        s = _scores(y_oos, p)
+        print(f"  {name:20s} acc={s['acc']:.3f}  auc={s['auc']:.3f}  "
+              f"logloss={s['logloss']:.3f}  brier={s['brier']:.3f}  ece={_ece(y_oos, p):.3f}")
+    sig = paired_bootstrap_auc_diff(y_oos, p_model, p_elo)
+    verdict = "SIGNIFICANT" if sig["hi"] < 0 or sig["lo"] > 0 else "not significant"
+    print(f"\n  model - Elo AUC = {sig['diff']:+.3f}  95% CI "
+          f"[{sig['lo']:+.3f}, {sig['hi']:+.3f}] (p={sig['p']:.3f}) -> {verdict}")
+
+
 def write_metrics(
     data: Path, features: Path, *, test_size: float = 0.2,
     out: Path = Path("data/processed/metrics.json"),
@@ -550,7 +606,13 @@ def main() -> None:
     parser.add_argument("--reliability-png", type=Path, default=Path("reports/reliability.png"))
     parser.add_argument("--metrics", action="store_true",
                         help="write data/processed/metrics.json for the website")
+    parser.add_argument("--walk-forward", action="store_true",
+                        help="expanding-window backtest over many folds")
+    parser.add_argument("--folds", type=int, default=8)
     args = parser.parse_args()
+    if args.walk_forward:
+        walk_forward(args.data, args.features, n_splits=args.folds)
+        return
     if args.metrics:
         write_metrics(args.data, args.features, test_size=args.test_size)
         return
