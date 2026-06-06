@@ -21,14 +21,14 @@ import pandas as pd
 from src.faceit_api import FaceitError, get_player_stats
 from src.features import (
     FEATURE_KEYS,
+    MODEL_FEATURE_COLS,
     elo_win_probability,
+    match_feature_row,
     team_average,
-    team_diff,
     team_elo,
 )
 
 DEFAULT_MODEL = Path("data/processed/best_model.joblib")
-FEATURE_COLS = [f"{key}_diff" for key in FEATURE_KEYS]
 
 
 def _fetch_team(names: list[str]) -> tuple[list[dict], list[tuple[str, str]]]:
@@ -55,13 +55,16 @@ def predict_from_stats(a_stats: list[dict], b_stats: list[dict], model) -> dict:
     model (e.g. the Django app) can reuse the exact same scoring path.
     """
     avg_a, avg_b = team_average(a_stats), team_average(b_stats)
-    vector = team_diff(avg_a, avg_b)
-    x = pd.DataFrame([vector])[FEATURE_COLS]
+    elo_a, elo_b = team_elo(a_stats), team_elo(b_stats)
+
+    # The model reasons from BOTH the FACEIT-Elo gap and the recent-form stat
+    # diffs (see src.features.match_feature_row / MODEL_FEATURE_COLS).
+    vector = match_feature_row(a_stats, b_stats)
+    x = pd.DataFrame([vector])[MODEL_FEATURE_COLS]
     prob_a = float(model.predict_proba(x)[0, 1])
 
     # FACEIT Elo baseline: a model-free prediction from the raw ratings, for
     # side-by-side comparison. None if Elo is missing for either team.
-    elo_a, elo_b = team_elo(a_stats), team_elo(b_stats)
     prob_a_elo = elo_win_probability(elo_a, elo_b) if (elo_a and elo_b) else None
 
     return {

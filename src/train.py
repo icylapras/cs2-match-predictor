@@ -24,11 +24,13 @@ from sklearn.pipeline import make_pipeline
 from sklearn.preprocessing import StandardScaler
 from xgboost import XGBClassifier
 
-from src.features import FEATURE_KEYS
+from src.features import MODEL_FEATURE_COLS
 
-DEFAULT_DATA = Path("data/processed/matches.parquet")
+DEFAULT_DATA = Path("data/processed/matches.csv")
+DEFAULT_ELO_FEATURES = Path("data/processed/elo_features.csv")
 DEFAULT_MODEL_OUT = Path("data/processed/best_model.joblib")
-FEATURE_COLS = [f"{key}_diff" for key in FEATURE_KEYS]
+# The production model uses the recent-form stat diffs AND the FACEIT-Elo gap.
+FEATURE_COLS = MODEL_FEATURE_COLS
 
 
 def load_dataset(path: Path) -> pd.DataFrame:
@@ -61,6 +63,7 @@ def evaluate(model, x_test: pd.DataFrame, y_test: pd.Series) -> tuple[float, flo
 def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--data", type=Path, default=DEFAULT_DATA)
+    parser.add_argument("--elo-features", type=Path, default=DEFAULT_ELO_FEATURES)
     parser.add_argument("--out", type=Path, default=DEFAULT_MODEL_OUT)
     parser.add_argument("--date-col", default="date")
     parser.add_argument("--target", default="label")
@@ -68,9 +71,16 @@ def main() -> None:
     args = parser.parse_args()
 
     df = load_dataset(args.data)
+    # Merge the FACEIT-Elo feature (built by src.elo) onto each match.
+    if args.elo_features.exists():
+        elo = load_dataset(args.elo_features)
+        df = df.merge(elo, on="match_id", how="inner")
     missing = [c for c in (*FEATURE_COLS, args.target, args.date_col) if c not in df.columns]
     if missing:
-        raise KeyError(f"Dataset is missing required columns: {missing}")
+        raise KeyError(
+            f"Dataset is missing required columns: {missing}. "
+            f"Build the Elo features first: python -m src.elo --data {args.data}"
+        )
 
     train_df, test_df = chronological_split(df, args.date_col, args.test_size)
     x_train, y_train = train_df[FEATURE_COLS], train_df[args.target]

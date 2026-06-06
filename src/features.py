@@ -14,6 +14,25 @@ from src.faceit_api import get_player_stats
 # Per-player metrics we average and diff. Keys must match get_player_stats output.
 FEATURE_KEYS = ("kd", "adr", "hs_percent", "win_rate")
 
+# The production model combines the recent-form stat diffs with the teams'
+# FACEIT-Elo gap, so the model reasons from *both* skill rating and form (not
+# stats alone, which ignored Elo and could contradict it). Training (src.train)
+# and inference (predict_from_stats) must use this exact column list/order.
+ELO_FEATURE = "faceit_elo_diff"
+MODEL_FEATURE_COLS = [f"{key}_diff" for key in FEATURE_KEYS] + [ELO_FEATURE]
+
+
+def match_feature_row(a_stats: list[dict], b_stats: list[dict]) -> dict[str, float]:
+    """Build the full model feature row (stat diffs + FACEIT-Elo gap) for a matchup.
+
+    Shared by training-time and inference-time paths so a row means the same
+    thing everywhere. ``a_stats``/``b_stats`` are per-player dicts that each carry
+    the FEATURE_KEYS plus an ``elo`` field (from get_player_stats).
+    """
+    row = team_diff(team_average(a_stats), team_average(b_stats))
+    row[ELO_FEATURE] = team_elo(a_stats) - team_elo(b_stats)
+    return row
+
 
 def team_average(player_stats: list[dict]) -> dict[str, float]:
     """Average the feature metrics across a team's per-player stat dicts."""
