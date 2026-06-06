@@ -5,7 +5,7 @@ from src.features import FEATURE_KEYS
 
 from .forms import DEMO_NICKNAMES, MatchForm, random_lineup_initial
 from .models import PredictionLog
-from .services import run_prediction
+from .services import get_metrics, run_prediction
 
 COIN_FLIP_BAND = 0.05  # |prob - 0.5| below this is "too close to call"
 
@@ -65,6 +65,7 @@ def index(request):
     context = {
         "recent": PredictionLog.objects.all()[:5],
         "demo_nicknames": DEMO_NICKNAMES,  # pool for the client-side shuffle button
+        "metrics": get_metrics(),  # track-record table (model vs FACEIT Elo)
     }
 
     if request.method == "POST":

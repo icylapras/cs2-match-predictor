@@ -171,6 +171,25 @@ th { color: var(--muted); font-weight: 500; }
 }
 .recent em, .result em { color: var(--muted); font-style: normal; }
 
+.track-record {
+    margin-top: 2.5rem;
+    padding: 1.25rem 1.5rem;
+    background: var(--card);
+    border: 1px solid var(--line);
+    border-radius: 12px;
+}
+.track-record h3 { margin: 0 0 0.3rem; }
+.track-record .tr-vs { color: var(--muted); font-weight: 400; font-size: 0.9rem; }
+.track-record .tr-sub { color: var(--muted); font-size: 0.9rem; margin: 0 0 1rem; }
+.tr-table { width: 100%; border-collapse: collapse; }
+.tr-table th, .tr-table td { text-align: left; padding: 0.5rem 0.6rem; border-bottom: 1px solid var(--line); }
+.tr-table th { color: var(--muted); font-weight: 500; font-size: 0.85rem; }
+.tr-table .tr-small { font-weight: 400; font-size: 0.72rem; }
+.tr-table tbody td { font-variant-numeric: tabular-nums; }
+.tr-table .tr-model { color: var(--text); font-weight: 600; }
+.tr-table .tr-model td:first-child { color: var(--accent); }
+.track-record .tr-note { color: var(--muted); font-size: 0.85rem; margin: 0.9rem 0 0; }
+
 .how-it-works {
     margin-top: 2.5rem;
     padding: 1rem 1.25rem;

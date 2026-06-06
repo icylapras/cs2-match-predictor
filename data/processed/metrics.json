@@ -1,0 +1,18 @@
+{
+  "n_train": 1672,
+  "n_test": 419,
+  "n_total": 2091,
+  "test_from": "2026-06-04",
+  "test_to": "2026-06-06",
+  "model": {
+    "accuracy_pct": 78,
+    "auc": 0.843,
+    "ece": 0.078
+  },
+  "faceit_elo": {
+    "accuracy_pct": 79,
+    "auc": 0.841,
+    "ece": 0.187
+  },
+  "generated": "2026-06-06"
+}

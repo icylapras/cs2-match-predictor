@@ -13,6 +13,8 @@ web path and the CLI path compute predictions identically.
 
 from __future__ import annotations
 
+import json
+
 from django.conf import settings
 from django.core.cache import cache
 
@@ -20,8 +22,22 @@ from src.faceit_api import FaceitError, get_player_stats
 from src.predict import load_model, predict_from_stats
 
 MODEL_PATH = settings.BASE_DIR / "data" / "processed" / "best_model.joblib"
+METRICS_PATH = settings.BASE_DIR / "data" / "processed" / "metrics.json"
 
 _model = None  # module-level singleton, populated on first use
+_metrics = None  # held-out model-vs-Elo accuracy, loaded once
+
+
+def get_metrics() -> dict | None:
+    """Out-of-time model-vs-FACEIT-Elo results for the site's 'track record'.
+
+    Loaded once from metrics.json (written by `python -m src.evaluate --metrics`).
+    Returns None if the file is missing, so the template can hide the section.
+    """
+    global _metrics
+    if _metrics is None and METRICS_PATH.exists():
+        _metrics = json.loads(METRICS_PATH.read_text())
+    return _metrics
 
 
 def get_model():

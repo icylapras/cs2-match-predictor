@@ -32,6 +32,10 @@ from sklearn.metrics import (
     log_loss,
     roc_auc_score,
 )
+import datetime
+import json
+
+from sklearn.calibration import CalibratedClassifierCV
 from sklearn.isotonic import IsotonicRegression
 from sklearn.pipeline import make_pipeline
 from sklearn.preprocessing import StandardScaler
@@ -485,6 +489,57 @@ def calibration_report(
         print(f"\nReliability diagram -> {out_png}")
 
 
+def write_metrics(
+    data: Path, features: Path, *, test_size: float = 0.2,
+    out: Path = Path("data/processed/metrics.json"),
+) -> dict:
+    """Compute the out-of-time model-vs-FACEIT-Elo comparison and save it to JSON.
+
+    This is what the website displays as its 'track record'. The model here is the
+    deployed architecture (isotonic-calibrated logreg on stats+Elo), trained on the
+    training split and scored on the held-out test matches it never saw.
+    """
+    cols = STAT_COLS + FACEIT_COL
+    df = pd.read_csv(data).merge(pd.read_csv(features), on="match_id", how="inner")
+    df["date"] = pd.to_datetime(df["date"])
+    train_df, test_df = chronological_split(df, "date", test_size)
+    y_te = test_df["label"].to_numpy()
+
+    model = CalibratedClassifierCV(
+        make_pipeline(StandardScaler(), LogisticRegression(max_iter=1000)),
+        method="isotonic", cv=5,
+    )
+    model.fit(train_df[cols], train_df["label"])
+    p_model = model.predict_proba(test_df[cols])[:, 1]
+    p_elo = test_df.apply(
+        lambda r: elo_win_probability(r["faceit_elo_a"], r["faceit_elo_b"]), axis=1
+    ).to_numpy()
+
+    def block(p) -> dict:
+        s = _scores(y_te, p)
+        return {
+            "accuracy_pct": round(s["acc"] * 100),
+            "auc": round(s["auc"], 3),
+            "ece": round(_ece(y_te, p), 3),
+        }
+
+    metrics = {
+        "n_train": len(train_df),
+        "n_test": len(test_df),
+        "n_total": len(df),
+        "test_from": str(test_df["date"].min().date()),
+        "test_to": str(test_df["date"].max().date()),
+        "model": block(p_model),
+        "faceit_elo": block(p_elo),
+        "generated": datetime.date.today().isoformat(),
+    }
+    out.parent.mkdir(parents=True, exist_ok=True)
+    out.write_text(json.dumps(metrics, indent=2))
+    print(json.dumps(metrics, indent=2))
+    print(f"\n-> {out}")
+    return metrics
+
+
 def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--data", type=Path, default=DEFAULT_DATA)
@@ -493,7 +548,12 @@ def main() -> None:
     parser.add_argument("--calibration", action="store_true",
                         help="run the calibration report + reliability diagram")
     parser.add_argument("--reliability-png", type=Path, default=Path("reports/reliability.png"))
+    parser.add_argument("--metrics", action="store_true",
+                        help="write data/processed/metrics.json for the website")
     args = parser.parse_args()
+    if args.metrics:
+        write_metrics(args.data, args.features, test_size=args.test_size)
+        return
     if args.calibration:
         calibration_report(args.data, args.features, test_size=args.test_size,
                            out_png=args.reliability_png)

@@ -102,6 +102,25 @@
     </section>
 {% endif %}
 
+{% if metrics %}
+<section class="track-record">
+    <h3>How accurate is it? <span class="tr-vs">vs FACEIT Elo</span></h3>
+    <p class="tr-sub">Tested on <strong>{{ metrics.n_test }} real FACEIT matches</strong> the model
+        never saw during training (out-of-time: trained on older games, scored on newer ones).</p>
+    <table class="tr-table">
+        <thead><tr><th>Predictor</th><th>Accuracy</th><th>AUC</th><th>Calibration<br><span class="tr-small">(ECE, lower=better)</span></th></tr></thead>
+        <tbody>
+            <tr class="tr-model"><td>Our model</td><td>{{ metrics.model.accuracy_pct }}%</td>
+                <td>{{ metrics.model.auc }}</td><td>{{ metrics.model.ece }}</td></tr>
+            <tr><td>FACEIT Elo formula</td><td>{{ metrics.faceit_elo.accuracy_pct }}%</td>
+                <td>{{ metrics.faceit_elo.auc }}</td><td>{{ metrics.faceit_elo.ece }}</td></tr>
+        </tbody>
+    </table>
+    <p class="tr-note">The model is about as accurate as FACEIT Elo, but its probabilities are far
+        better <em>calibrated</em> — a "70%" really wins about 70% of the time.</p>
+</section>
+{% endif %}
+
 <details class="how-it-works">
     <summary>How this works</summary>
     <ol>
