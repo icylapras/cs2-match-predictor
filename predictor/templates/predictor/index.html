@@ -21,9 +21,11 @@
         <span class="spinner" aria-hidden="true"></span>
         <span class="btn-label">Predict winner</span>
     </button>
+    <button type="button" class="shuffle-btn" id="shuffle-btn">Shuffle lineup</button>
     <p class="loading-note" hidden>Fetching 10 players from FACEIT — the first
         prediction can take a few seconds.</p>
 </form>
+{{ demo_nicknames|json_script:"demo-nicknames" }}
 
 {% if error %}
     <div class="error"><strong>Couldn't predict:</strong><pre>{{ error }}</pre></div>
@@ -91,6 +93,29 @@
             if (e.key === "Enter" || e.key === " ") { e.preventDefault(); fillTeams(item); }
         });
     });
+
+    // "Shuffle lineup" — re-randomize the 10 fields from the demo pool,
+    // no page reload. Same field ids as the recent-prediction fill above.
+    var poolEl = document.getElementById("demo-nicknames");
+    var shuffleBtn = document.getElementById("shuffle-btn");
+    if (poolEl && shuffleBtn) {
+        var pool = JSON.parse(poolEl.textContent);
+        shuffleBtn.addEventListener("click", function () {
+            var picks = pool.slice();
+            for (var i = picks.length - 1; i > 0; i--) {  // Fisher-Yates
+                var j = Math.floor(Math.random() * (i + 1));
+                var tmp = picks[i]; picks[i] = picks[j]; picks[j] = tmp;
+            }
+            var slot = 0;
+            ["a", "b"].forEach(function (side) {
+                for (var n = 1; n <= 5; n++) {
+                    var input = document.getElementById("id_" + side + n);
+                    if (input && picks[slot] !== undefined) { input.value = picks[slot]; }
+                    slot++;
+                }
+            });
+        });
+    }
 
     // Show a spinner while the prediction request is in flight. The submit
     // event only fires once the browser's required-field validation passes,

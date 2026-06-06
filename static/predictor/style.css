@@ -71,6 +71,20 @@ button:hover { filter: brightness(1.1); }
 @keyframes spin { to { transform: rotate(360deg); } }
 .loading-note { color: var(--muted); font-size: 0.85rem; margin-top: 0.6rem; text-align: center; }
 
+.shuffle-btn {
+    margin-top: 0.6rem;
+    width: 100%;
+    padding: 0.6rem;
+    background: transparent;
+    color: var(--muted);
+    border: 1px solid var(--line);
+    border-radius: 6px;
+    font-size: 0.9rem;
+    font-weight: 500;
+    cursor: pointer;
+}
+.shuffle-btn:hover { filter: none; border-color: var(--accent); color: var(--text); }
+
 .error {
     margin-top: 1.5rem;
     padding: 1rem;

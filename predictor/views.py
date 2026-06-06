@@ -3,7 +3,7 @@ from django.shortcuts import render
 from src.faceit_api import FaceitError
 from src.features import FEATURE_KEYS
 
-from .forms import MatchForm, random_lineup_initial
+from .forms import DEMO_NICKNAMES, MatchForm, random_lineup_initial
 from .models import PredictionLog
 from .services import run_prediction
 
@@ -45,7 +45,10 @@ def _result_context(team_a, team_b, prediction):
 
 
 def index(request):
-    context = {"recent": PredictionLog.objects.all()[:5]}
+    context = {
+        "recent": PredictionLog.objects.all()[:5],
+        "demo_nicknames": DEMO_NICKNAMES,  # pool for the client-side shuffle button
+    }
 
     if request.method == "POST":
         form = MatchForm(request.POST)
