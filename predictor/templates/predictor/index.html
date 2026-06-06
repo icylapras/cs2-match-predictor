@@ -86,20 +86,22 @@
         <li><strong>Read recent form.</strong> For each of the 10 players we pull
             their recent CS2 matches from FACEIT and compute four numbers:
             K/D ratio, ADR (average damage per round), headshot&nbsp;%, and win&nbsp;rate.</li>
-        <li><strong>Compare the two teams.</strong> We average each team's five
-            players, then take the difference (Team&nbsp;A minus Team&nbsp;B) for each
-            stat — so a single row of numbers captures the skill gap between the sides.</li>
-        <li><strong>Predict.</strong> A machine-learning model, trained on thousands
-            of real historical FACEIT matches, turns that skill gap into a calibrated
-            win probability — the orange bar above.</li>
+        <li><strong>Compare the two teams.</strong> We take the gap between the teams'
+            <strong>average FACEIT Elo</strong> (the main skill signal) plus the
+            difference in each form stat (Team&nbsp;A minus Team&nbsp;B).</li>
+        <li><strong>Predict.</strong> A machine-learning model, trained on ~2,000 real
+            historical FACEIT matches, combines the Elo gap and the form stats into a
+            calibrated win probability — the orange bar above.</li>
     </ol>
     <p class="how-rigor"><strong>Why you can trust the number.</strong> The model is
         trained <em>leakage-safe</em>: the features for any historical match use only
         each player's matches that finished <em>before</em> it, never the result it is
         trying to predict. It is then tested <em>out-of-time</em> — trained on older
-        matches and scored on newer ones it has never seen. Realistic accuracy is
-        around <strong>58–65%</strong>: CS2 has real upsets, so this is an honest fun
-        tool, not a betting product.</p>
+        matches and scored on newer ones it has never seen, and its probabilities are
+        <em>calibrated</em> (a "70%" really wins about 70% of the time). Accuracy is
+        ~78% across typical matchups but closer to <strong>60%</strong> when the two
+        teams are evenly matched — CS2 has real upsets, so this is an honest fun tool,
+        not a betting product.</p>
     <p class="how-rigor"><strong>The blue bar</strong> is a model-free baseline: the
         standard Elo formula applied to the players' current FACEIT Elo. Showing it
         next to the model lets you see whether the model adds anything over the raw
