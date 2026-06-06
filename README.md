@@ -5,8 +5,8 @@ usernames. Enter two teams of five, and the app estimates each player's skill
 from their recent match history and returns a calibrated win probability.
 
 The project is built end-to-end: a **leakage-safe ML pipeline** (FACEIT API →
-features → model), a **Django web app** with a caching layer and persistence,
-and a **Streamlit** demo — all sharing the same prediction core.
+features → model) and a **Django web app** with a caching layer and
+persistence, both sharing the same prediction core.
 
 ---
 
@@ -36,15 +36,15 @@ honest about the result:
                 │  predict                                 │
                 └───────────────┬─────────────────────────┘
                                 │ predict_from_stats()
-              ┌─────────────────┼──────────────────┐
-              │                 │                  │
-      ┌───────▼──────┐  ┌───────▼───────┐  ┌───────▼───────┐
-      │  Django app  │  │ Streamlit app │  │  CLI (python  │
-      │ (config/ +   │  │   (app.py)    │  │  -m src.*)    │
-      │  predictor/) │  └───────────────┘  └───────────────┘
-      │ cache · DB · │
-      │ tests        │
-      └──────────────┘
+                  ┌─────────────┴─────────────┐
+                  │                           │
+          ┌───────▼──────┐            ┌───────▼───────┐
+          │  Django app  │            │  CLI (python  │
+          │ (config/ +   │            │  -m src.*)    │
+          │  predictor/) │            └───────────────┘
+          │ cache · DB · │
+          │ tests        │
+          └──────────────┘
 ```
 
 The ML logic lives in `src/` and knows nothing about the web. The Django app is
@@ -86,7 +86,6 @@ src/                    # ML library (no web dependencies)
   predict.py            #   matchup → win probability
 config/                 # Django project (settings, urls)
 predictor/              # Django app: views, forms, services (cache+model), model, tests
-app.py                  # Streamlit demo
 data/processed/         # demo dataset + trained model (committed for reproducibility)
 ```
 
@@ -131,4 +130,4 @@ Run the tests:
 
 ## Tech stack
 
-Python · scikit-learn · XGBoost · pandas · Django · Streamlit · FACEIT Data API
+Python · scikit-learn · XGBoost · pandas · Django · FACEIT Data API
