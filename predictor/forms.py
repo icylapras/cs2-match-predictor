@@ -1,6 +1,23 @@
+import random
+
 from django import forms
 
 TEAM_SIZE = 5
+
+# Known-active FACEIT nicknames, used to pre-fill the form so the app is
+# demo-ready out of the box. Must be real (exact) nicknames — guessed ones
+# 404 against the FACEIT API. Update if any go inactive.
+DEMO_NICKNAMES = [
+    "s1mple-_---", "cigarette66", "-ZeroSanity-", "Ezio_-", "_Ghani_",
+    "--VerGiL-", "-Murphy1337", "ropz", "-WARDELL", "SupaWashed",
+]
+
+
+def random_lineup_initial() -> dict[str, str]:
+    """A randomly shuffled 5-v-5 lineup to seed an unbound form."""
+    picks = random.sample(DEMO_NICKNAMES, 2 * TEAM_SIZE)
+    fields = [f"{side}{i}" for side in ("a", "b") for i in range(1, TEAM_SIZE + 1)]
+    return dict(zip(fields, picks))
 
 
 class MatchForm(forms.Form):

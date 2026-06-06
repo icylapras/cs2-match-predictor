@@ -3,7 +3,7 @@ from django.shortcuts import render
 from src.faceit_api import FaceitError
 from src.features import FEATURE_KEYS
 
-from .forms import MatchForm
+from .forms import MatchForm, random_lineup_initial
 from .models import PredictionLog
 from .services import run_prediction
 
@@ -59,7 +59,7 @@ def index(request):
                 context["result"] = _result_context(team_a, team_b, prediction)
                 context["recent"] = PredictionLog.objects.all()[:5]
     else:
-        form = MatchForm()
+        form = MatchForm(initial=random_lineup_initial())
 
     context["form"] = form
     return render(request, "predictor/index.html", context)
