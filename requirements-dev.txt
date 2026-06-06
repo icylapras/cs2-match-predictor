@@ -1,0 +1,4 @@
+# Dev/analysis-only dependencies (NOT installed in production).
+# Used to generate the reliability diagram (src.evaluate --calibration).
+# Install with: .venv/bin/pip install -r requirements-dev.txt
+matplotlib>=3.8

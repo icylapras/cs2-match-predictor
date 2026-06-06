@@ -186,6 +186,43 @@ def faceit_features(
     return pd.DataFrame(rows)
 
 
+def stacking_features(
+    dataset: pd.DataFrame, rosters: pd.DataFrame, *, date_col: str = "date"
+) -> pd.DataFrame:
+    """Leakage-safe teammate 'stacking' signal — orthogonal to FACEIT Elo.
+
+    A single Elo number can't tell a coordinated 5-stack from five strangers at
+    the same rating. For each team we measure how much its players have played
+    together *before* this match: the average, over the team's 10 player-pairs,
+    of the number of prior matches that pair were teammates. Counts use only
+    matches earlier than the current one (chronological), so no leakage.
+
+    Returns match_id, stack_a, stack_b, stack_diff (A - B).
+    """
+    from collections import defaultdict
+    from itertools import combinations
+
+    merged = dataset[["match_id", date_col]].merge(rosters, on="match_id", how="inner")
+    merged[date_col] = pd.to_datetime(merged[date_col])
+    merged = merged.sort_values([date_col, "match_id"]).reset_index(drop=True)
+
+    pair_count: dict[tuple[str, str], int] = defaultdict(int)
+
+    def team_stack(ids: list[str]) -> float:
+        pairs = list(combinations(sorted(ids), 2))
+        return sum(pair_count[p] for p in pairs) / len(pairs) if pairs else 0.0
+
+    rows = []
+    for _, r in merged.iterrows():
+        a, b = r["a_ids"].split(), r["b_ids"].split()
+        sa, sb = team_stack(a), team_stack(b)
+        rows.append({"match_id": r["match_id"], "stack_a": sa, "stack_b": sb, "stack_diff": sa - sb})
+        for team in (a, b):  # update AFTER recording the feature (leakage-safe)
+            for pair in combinations(sorted(team), 2):
+                pair_count[pair] += 1
+    return pd.DataFrame(rows)
+
+
 def _expected_a(elo_a: float, elo_b: float) -> float:
     """Standard Elo expected score for team A on the 400-point logistic scale."""
     return 1.0 / (1.0 + 10 ** ((elo_b - elo_a) / 400.0))

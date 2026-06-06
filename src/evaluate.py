@@ -32,6 +32,7 @@ from sklearn.metrics import (
     log_loss,
     roc_auc_score,
 )
+from sklearn.isotonic import IsotonicRegression
 from sklearn.pipeline import make_pipeline
 from sklearn.preprocessing import StandardScaler
 from scipy.stats import norm
@@ -264,6 +265,81 @@ def _auc(y, p) -> float:
         return float("nan")
 
 
+def _bootstrap_auc_ci(y, p, *, n_boot: int = 5000, seed: int = 42) -> dict[str, float]:
+    """Bootstrap 95% CI for a single predictor's AUC (to test it vs a 0.5 coin flip)."""
+    rng = np.random.default_rng(seed)
+    y = np.asarray(y)
+    p = np.asarray(p)
+    n = len(y)
+    aucs = []
+    for _ in range(n_boot):
+        idx = rng.integers(0, n, n)
+        yt = y[idx]
+        if yt.min() == yt.max():
+            continue
+        aucs.append(roc_auc_score(yt, p[idx]))
+    aucs = np.array(aucs)
+    return {"auc": float(aucs.mean()), "lo": float(np.percentile(aucs, 2.5)),
+            "hi": float(np.percentile(aucs, 97.5))}
+
+
+def balanced_experiment(
+    data: Path, features: Path, *, thresholds=(75, 50, 30), test_size: float = 0.2
+) -> None:
+    """Train AND test only on *balanced* matches (small team Elo gap).
+
+    The hard, honest regime: once both sides are the same rank, the Elo formula is
+    near 50/50, so recent-form stats finally have room to matter. For each Elo-gap
+    threshold we restrict the whole dataset, re-split chronologically, and ask:
+      (1) do stats beat a coin flip?  (stats-only AUC CI vs 0.5)
+      (2) do stats add over the residual Elo?  (stats+Elo vs the Elo calculator)
+    """
+    df = pd.read_csv(data).merge(pd.read_csv(features), on="match_id", how="inner")
+    df["date"] = pd.to_datetime(df["date"])
+    print("\n" + "=" * 84)
+    print("BALANCED-MATCHES EXPERIMENT — train+test only where the team Elo gap is small")
+    print("=" * 84)
+
+    for thr in thresholds:
+        sub = df[df["faceit_elo_diff"].abs() < thr].copy()
+        if len(sub) < 120:
+            print(f"\n|Elo gap| < {thr}: n={len(sub)} — too small, skipped")
+            continue
+        train_df, test_df = chronological_split(sub, "date", test_size)
+        y_train = train_df["label"]
+        y_test = test_df["label"].to_numpy()
+
+        probas = {
+            "calc": test_df.apply(
+                lambda r: elo_win_probability(r["faceit_elo_a"], r["faceit_elo_b"]), axis=1
+            ).to_numpy()
+        }
+        for name, cols in {
+            "stats": STAT_COLS,
+            "elo": FACEIT_COL,
+            "stats+elo": STAT_COLS + FACEIT_COL,
+        }.items():
+            m = make_pipeline(StandardScaler(), LogisticRegression(max_iter=1000))
+            m.fit(train_df[cols], y_train)
+            probas[name] = m.predict_proba(test_df[cols])[:, 1]
+
+        ci = _bootstrap_auc_ci(y_test, probas["stats"])
+        sig = paired_bootstrap_auc_diff(y_test, probas["stats+elo"], probas["calc"])
+        beats_coin = "YES" if ci["lo"] > 0.5 else "no"
+        beats_calc = "YES" if sig["lo"] > 0 else "no"
+
+        print(f"\n|Elo gap| < {thr}:  n={len(sub)} (train {len(train_df)} / test {len(test_df)}, "
+              f"base rate {y_test.mean():.2f})")
+        print(f"  AUC  calculator={_auc(y_test, probas['calc']):.3f}  "
+              f"elo-only={_auc(y_test, probas['elo']):.3f}  "
+              f"stats-only={_auc(y_test, probas['stats']):.3f}  "
+              f"stats+elo={_auc(y_test, probas['stats+elo']):.3f}")
+        print(f"  (1) stats beat coin flip? stats-only AUC {ci['auc']:.3f} "
+              f"95% CI [{ci['lo']:.3f}, {ci['hi']:.3f}] -> {beats_coin}")
+        print(f"  (2) stats add over Elo?   (stats+elo - calc) {sig['diff']:+.3f} "
+              f"95% CI [{sig['lo']:+.3f}, {sig['hi']:+.3f}] (p={sig['p']:.3f}) -> {beats_calc}")
+
+
 def close_matchup_analysis(
     data: Path, features: Path, *, test_size: float = 0.2
 ) -> None:
@@ -327,12 +403,101 @@ def close_matchup_analysis(
               f"[{boot['lo']:+.3f}, {boot['hi']:+.3f}]  (p={boot['p']:.3f}) -> {verdict}")
 
 
+def _ece(y, p, *, n_bins: int = 10) -> float:
+    """Expected Calibration Error: avg gap between predicted prob and observed
+    frequency, weighted by bin population. 0 = perfectly calibrated."""
+    y = np.asarray(y)
+    p = np.asarray(p)
+    edges = np.linspace(0.0, 1.0, n_bins + 1)
+    idx = np.clip(np.digitize(p, edges[1:-1]), 0, n_bins - 1)
+    ece = 0.0
+    for b in range(n_bins):
+        m = idx == b
+        if m.any():
+            ece += m.mean() * abs(p[m].mean() - y[m].mean())
+    return float(ece)
+
+
+def calibration_report(
+    data: Path, features: Path, *, test_size: float = 0.2, out_png: Path | None = None
+) -> None:
+    """Quantify (and optionally plot) the model's calibration edge over the raw
+    Elo formula, and whether isotonic scaling sharpens it further.
+
+    The model's only proven advantage over the FACEIT Elo calculator is that its
+    probabilities are more *honest* (a "70%" really wins ~70% of the time). This
+    measures that with log-loss / Brier / ECE and a reliability diagram.
+
+    Isotonic is fit on a chronological calibration slice (the most recent 20% of
+    the training data), never on the test set, so there's no leakage.
+    """
+    cols = STAT_COLS + FACEIT_COL
+    df = pd.read_csv(data).merge(pd.read_csv(features), on="match_id", how="inner")
+    train_df, test_df = chronological_split(df, "date", test_size)
+    fit_df, calib_df = chronological_split(train_df, "date", 0.2)  # calib = newest of train
+    y_te = test_df["label"].to_numpy()
+
+    model = make_pipeline(StandardScaler(), LogisticRegression(max_iter=1000))
+    model.fit(fit_df[cols], fit_df["label"])
+    p_model = model.predict_proba(test_df[cols])[:, 1]
+
+    iso = IsotonicRegression(out_of_bounds="clip")
+    iso.fit(model.predict_proba(calib_df[cols])[:, 1], calib_df["label"])
+    p_iso = iso.predict(p_model)
+
+    p_calc = test_df.apply(
+        lambda r: elo_win_probability(r["faceit_elo_a"], r["faceit_elo_b"]), axis=1
+    ).to_numpy()
+
+    contenders = {
+        "FACEIT Elo calculator": p_calc,
+        "model (stats+Elo)": p_model,
+        "model + isotonic": p_iso,
+    }
+    print("\n" + "=" * 72)
+    print(f"CALIBRATION REPORT (test n={len(y_te)}) — lower log-loss/Brier/ECE = better")
+    print("=" * 72)
+    for name, p in contenders.items():
+        s = _scores(y_te, p)
+        print(f"  {name:24s} logloss={s['logloss']:.3f}  brier={s['brier']:.3f}  "
+              f"ece={_ece(y_te, p):.3f}  auc={s['auc']:.3f}")
+
+    if out_png is not None:
+        try:
+            import matplotlib
+            matplotlib.use("Agg")
+            import matplotlib.pyplot as plt
+            from sklearn.calibration import calibration_curve
+        except ImportError:
+            print("\n(matplotlib not installed — skipping reliability diagram)")
+            return
+        fig, ax = plt.subplots(figsize=(6, 6))
+        ax.plot([0, 1], [0, 1], "--", color="gray", label="perfectly calibrated")
+        for name, p in contenders.items():
+            frac_pos, mean_pred = calibration_curve(y_te, p, n_bins=10, strategy="quantile")
+            ax.plot(mean_pred, frac_pos, "o-", label=name)
+        ax.set_xlabel("Predicted P(Team A wins)")
+        ax.set_ylabel("Observed frequency")
+        ax.set_title("Reliability diagram — CS2 match predictor")
+        ax.legend(loc="upper left", fontsize=9)
+        out_png.parent.mkdir(parents=True, exist_ok=True)
+        fig.savefig(out_png, dpi=120, bbox_inches="tight")
+        print(f"\nReliability diagram -> {out_png}")
+
+
 def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--data", type=Path, default=DEFAULT_DATA)
     parser.add_argument("--features", type=Path, default=DEFAULT_FEATURES)
     parser.add_argument("--test-size", type=float, default=0.2)
+    parser.add_argument("--calibration", action="store_true",
+                        help="run the calibration report + reliability diagram")
+    parser.add_argument("--reliability-png", type=Path, default=Path("reports/reliability.png"))
     args = parser.parse_args()
+    if args.calibration:
+        calibration_report(args.data, args.features, test_size=args.test_size,
+                           out_png=args.reliability_png)
+        return
     evaluate(args.data, args.features, test_size=args.test_size)
     close_matchup_analysis(args.data, args.features, test_size=args.test_size)
 
