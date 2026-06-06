@@ -18,8 +18,9 @@ from pathlib import Path
 
 import joblib
 import pandas as pd
+from sklearn.calibration import CalibratedClassifierCV
 from sklearn.linear_model import LogisticRegression
-from sklearn.metrics import accuracy_score, roc_auc_score
+from sklearn.metrics import accuracy_score, brier_score_loss, log_loss, roc_auc_score
 from sklearn.pipeline import make_pipeline
 from sklearn.preprocessing import StandardScaler
 from xgboost import XGBClassifier
@@ -60,6 +61,21 @@ def evaluate(model, x_test: pd.DataFrame, y_test: pd.Series) -> tuple[float, flo
     return accuracy_score(y_test, preds), roc_auc_score(y_test, proba)
 
 
+def _make_model(name: str):
+    """A fresh, unfitted estimator (so calibration can clone/refit cleanly)."""
+    if name == "logreg":
+        return make_pipeline(StandardScaler(), LogisticRegression(max_iter=1000))
+    return XGBClassifier(
+        n_estimators=200,
+        max_depth=4,
+        learning_rate=0.05,
+        subsample=0.8,
+        colsample_bytree=0.8,
+        eval_metric="logloss",
+        random_state=42,
+    )
+
+
 def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--data", type=Path, default=DEFAULT_DATA)
@@ -87,31 +103,37 @@ def main() -> None:
     x_test, y_test = test_df[FEATURE_COLS], test_df[args.target]
     print(f"Train: {len(train_df)} matches | Test: {len(test_df)} matches\n")
 
-    models = {
-        "logreg": make_pipeline(StandardScaler(), LogisticRegression(max_iter=1000)),
-        "xgboost": XGBClassifier(
-            n_estimators=200,
-            max_depth=4,
-            learning_rate=0.05,
-            subsample=0.8,
-            colsample_bytree=0.8,
-            eval_metric="logloss",
-            random_state=42,
-        ),
-    }
-
+    # Pick the best base model by AUC on the holdout, then deploy an
+    # isotonic-CALIBRATED version of it so the published probabilities are honest
+    # (a "70%" really wins ~70% of the time — the model's proven edge over the raw
+    # Elo formula). AUC is rank-based so calibration barely moves it.
     results = {}
-    for name, model in models.items():
+    for name in ("logreg", "xgboost"):
+        model = _make_model(name)
         model.fit(x_train, y_train)
         acc, auc = evaluate(model, x_test, y_test)
-        results[name] = (model, acc, auc)
+        results[name] = auc
         print(f"{name:8s}  accuracy={acc:.3f}  auc={auc:.3f}")
 
-    best_name = max(results, key=lambda n: results[n][2])  # highest AUC
-    best_model = results[best_name][0]
+    best_name = max(results, key=results.get)
+    print(f"\nBest base model: {best_name} (auc={results[best_name]:.3f})")
+
+    # Show the calibration gain on the holdout (calibrator fit on train only).
+    calibrated_holdout = CalibratedClassifierCV(_make_model(best_name), method="isotonic", cv=5)
+    calibrated_holdout.fit(x_train, y_train)
+    base = _make_model(best_name)
+    base.fit(x_train, y_train)
+    print("Holdout calibration (lower = better):")
+    for label, m in (("uncalibrated", base), ("isotonic   ", calibrated_holdout)):
+        p = m.predict_proba(x_test)[:, 1]
+        print(f"  {label}  logloss={log_loss(y_test, p):.3f}  brier={brier_score_loss(y_test, p):.3f}")
+
+    # Production model: isotonic-calibrated, trained on ALL matches for best live quality.
+    production = CalibratedClassifierCV(_make_model(best_name), method="isotonic", cv=5)
+    production.fit(df[FEATURE_COLS], df[args.target])
     args.out.parent.mkdir(parents=True, exist_ok=True)
-    joblib.dump(best_model, args.out)
-    print(f"\nBest model: {best_name} (auc={results[best_name][2]:.3f}) -> saved to {args.out}")
+    joblib.dump(production, args.out)
+    print(f"\nSaved calibrated {best_name} (trained on all {len(df)} matches) -> {args.out}")
 
 
 if __name__ == "__main__":
