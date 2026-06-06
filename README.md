@@ -1,39 +1,71 @@
 # CS2 Match Predictor
 
 Predict the winner of a Counter-Strike 2 match from the 10 players' FACEIT
-usernames. Enter two teams of five, and the app estimates each player's skill
-from their recent match history and returns a calibrated win probability.
+usernames. Enter two teams of five; the app combines each team's **average
+FACEIT Elo** with their **recent-form stats** (K/D, ADR, headshot %, win rate)
+and returns a **calibrated** win probability.
 
-The project is built end-to-end: a **leakage-safe ML pipeline** (FACEIT API →
-features → model) and a **Django web app** with a caching layer and
-persistence, both sharing the same prediction core.
+**Live:** https://cs2-match-predictor.onrender.com
+(free tier — the first request after it's been idle takes ~30s to wake up)
+
+Built end-to-end: a **leakage-safe ML pipeline** (FACEIT API → features → model
+→ evaluation) and a **Django web app** with a caching layer and persistence,
+both sharing the same prediction core.
 
 ---
 
-## Why this project is interesting
+## Methods
 
 Most "predict the winner" projects quietly leak future information and report
-implausibly high accuracy. This one is deliberately careful about that, and is
-honest about the result:
+implausibly high accuracy. This one is deliberately rigorous and reports the
+honest result.
 
-- **Leakage-safe by construction.** A match's features are built *only* from
-  each player's matches that finished **before** that match. The guard is
-  verified, not assumed (see `src/faceit_api.py::features_before`).
-- **Chronological train/test split** — the model is always tested on matches
-  newer than everything it trained on.
-- **Measured against a baseline mindset** — the goal is beating a coin flip on
-  *balanced* matchmaking, the hardest possible case.
-- **Honest result:** **AUC ≈ 0.60** on 243 real matches. A believable, modest
-  edge — and the fact that it *isn't* 0.85+ is itself evidence the leakage
-  protection works.
+- **Leakage-safe by construction.** A match's stat features use *only* each
+  player's matches that finished **before** that match
+  (`src/faceit_api.py::features_before`).
+- **Out-of-time evaluation.** A chronological train/test split — the model is
+  always scored on matches newer than everything it trained on.
+- **A real baseline, not a coin flip.** The model is benchmarked against the
+  **FACEIT Elo calculator** (the standard Elo win-probability formula on each
+  player's current Elo) — a genuinely strong baseline to beat.
+- **Significance testing.** Differences in AUC are tested with a **paired
+  bootstrap confidence interval** and **DeLong's test**, so "better" means
+  statistically better, not noise (`src/evaluate.py`).
+- **Calibration.** Beyond ranking, the probabilities are measured with log-loss,
+  Brier score and **Expected Calibration Error (ECE)**, and sharpened with
+  **isotonic regression** (reliability diagram below).
+- **Honest result.** FACEIT Elo turns out to be a near-complete predictor:
+  recent-form stats — and four other orthogonal features that were tested and
+  rejected — add no statistically significant *ranking* value. The model's real,
+  measured edge over the raw Elo formula is **calibration**.
+
+## Results
+
+On **2,091 real FACEIT matches** (chronological split; 419 held-out test matches
+the model never saw during training):
+
+| Predictor | Accuracy | AUC | Calibration (ECE) |
+|---|---|---|---|
+| **Our model** (stats + FACEIT Elo, isotonic-calibrated) | 78% | **0.843** | **0.078** |
+| FACEIT Elo formula (baseline) | 79% | 0.841 | 0.187 |
+
+The model is about as accurate as FACEIT Elo on ranking, but its probabilities
+are far better **calibrated** (ECE 0.19 → 0.08 — a "70%" really wins ~70% of the
+time). These figures are shown live on the site and regenerated on every retrain.
+
+![Reliability diagram](reports/reliability.png)
+
+> ~78% accuracy reflects that real matchups are often lopsided (easy to call from
+> the Elo gap). On *evenly matched* teams accuracy is closer to ~60% — the honest
+> ceiling for this problem.
 
 ## Architecture
 
 ```
                 ┌─────────────────────────────────────────┐
                 │  src/  (framework-agnostic ML library)   │
-                │  faceit_api · features · dataset · train │
-                │  predict                                 │
+                │  faceit_api · features · dataset · elo    │
+                │  train · evaluate · predict              │
                 └───────────────┬─────────────────────────┘
                                 │ predict_from_stats()
                   ┌─────────────┴─────────────┐
@@ -63,30 +95,22 @@ served from memory:
 In production this in-memory cache would move to Redis, and the FACEIT fetches
 into a background worker so requests never block.
 
-## Results
-
-| Model | Accuracy | AUC-ROC |
-|---|---|---|
-| Logistic regression (baseline) | 0.531 | **0.596** |
-| XGBoost | 0.510 | 0.531 |
-
-On 243 leakage-safe matches (chronological split, 49 in test). The numbers are
-noisy at this sample size — treated as promising signal, not proof. The model is
-far more confident on *unbalanced* matchups (e.g. a clearly stronger team scores
-~0.88), which is the intended use case.
-
 ## Project structure
 
 ```
 src/                    # ML library (no web dependencies)
   faceit_api.py         #   FACEIT client + leakage-safe stat aggregation
-  features.py           #   team-difference feature vectors
-  dataset.py            #   builds labeled training data from real matches
-  train.py              #   chronological split, trains + evaluates, saves model
+  features.py           #   team-difference + Elo-gap feature vectors
+  dataset.py            #   builds labeled data (snowball crawl over the player graph)
+  elo.py                #   FACEIT-Elo snapshot + from-scratch leakage-free Elo replay
+  train.py              #   chronological split, trains, isotonic-calibrates, saves model
+  evaluate.py           #   model vs Elo calculator vs naive: AUC/log-loss/Brier/ECE
+                        #   + paired-bootstrap & DeLong significance + calibration report
   predict.py            #   matchup → win probability
 config/                 # Django project (settings, urls)
-predictor/              # Django app: views, forms, services (cache+model), model, tests
-data/processed/         # demo dataset + trained model (committed for reproducibility)
+predictor/              # Django app: views, forms, services (cache+model+metrics), tests
+data/processed/         # committed: matches.csv, best_model.joblib, elo_features.csv, metrics.json
+reports/                # reliability diagram
 ```
 
 ## Getting started
@@ -107,10 +131,21 @@ cp .env.example .env        # then set FACEIT_API_KEY=...
 .venv/bin/python -m src.predict \
   --team-a='name1,name2,name3,name4,name5' \
   --team-b='name6,name7,name8,name9,name10'
+```
 
-# 5. Rebuild the dataset / retrain (optional)
-.venv/bin/python -m src.dataset --seed='<nickname>' --max-matches 400
+Rebuild the dataset and model from scratch (needs the API key):
+
+```bash
+# crawl matches, build Elo features, train (isotonic-calibrated), evaluate
+.venv/bin/python -m src.dataset --seed='<nickname>' --target=2500 --per-player=30
+.venv/bin/python -m src.elo --data data/processed/matches.csv
 .venv/bin/python -m src.train
+.venv/bin/python -m src.evaluate                 # model vs Elo vs naive + significance
+.venv/bin/python -m src.evaluate --metrics       # refresh the site's track-record table
+
+# calibration report + reliability diagram (matplotlib is dev-only)
+.venv/bin/pip install -r requirements-dev.txt
+.venv/bin/python -m src.evaluate --calibration
 ```
 
 Run the tests:
@@ -121,12 +156,12 @@ Run the tests:
 
 ## Limitations & future work
 
-- **More data.** 243 matches is small; thousands would firm up the AUC estimate.
-- **Elo baseline.** A reconstructed (leakage-safe) Elo rating would be both a
-  stronger baseline to beat and a likely-powerful feature.
-- **Richer features.** The FACEIT stats endpoint also exposes K/R, MVPs,
-  per-map performance, etc.
-- **Deployment.** Add gunicorn/whitenoise and host on a free tier for a live link.
+- **More data.** 2,091 matches gives a ~419-match test set; a larger crawl would
+  tighten the confidence intervals further.
+- **Remaining feature ideas.** Per-map skill and momentum/recent-trend are the
+  orthogonal signals not yet tested (they need richer per-match history).
+- **Live backtest.** Continuously validate on newly finished matches for a
+  rolling, always-current accuracy figure.
 
 ## Tech stack
 
