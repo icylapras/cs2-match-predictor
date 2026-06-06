@@ -1,4 +1,4 @@
-# 🎯 CS2 Match Predictor
+# CS2 Match Predictor
 
 Predict the winner of a Counter-Strike 2 match from the 10 players' FACEIT
 usernames. Enter two teams of five, and the app estimates each player's skill
