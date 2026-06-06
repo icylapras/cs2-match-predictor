@@ -69,4 +69,16 @@ def run_prediction(team_a: list[str], team_b: list[str]) -> dict:
     if failures:
         raise FaceitError("Could not fetch these players:\n" + "\n".join(failures))
 
-    return predict_from_stats(a_stats, b_stats, get_model())
+    result = predict_from_stats(a_stats, b_stats, get_model())
+    # Per-player nickname + Elo, so the page can show *why* a team is favored.
+    result["players_a"] = _player_rows(a_stats)
+    result["players_b"] = _player_rows(b_stats)
+    return result
+
+
+def _player_rows(stats: list[dict]) -> list[dict]:
+    """Nickname + rounded Elo per player (Elo None if FACEIT didn't expose it)."""
+    return [
+        {"name": s.get("username"), "elo": round(s["elo"]) if s.get("elo") else None}
+        for s in stats
+    ]

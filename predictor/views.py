@@ -56,6 +56,8 @@ def _result_context(team_a, team_b, prediction):
         "coin_flip": abs(prob_a - 0.5) < COIN_FLIP_BAND,
         "rows": rows,
         "elo": elo,
+        "players_a": prediction.get("players_a"),
+        "players_b": prediction.get("players_b"),
     }
 
 

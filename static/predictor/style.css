@@ -13,10 +13,13 @@ body {
     margin: 0;
     background: var(--bg);
     color: var(--text);
-    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+    font-family: "Inter", -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
     line-height: 1.5;
     min-height: 100vh;
+    -webkit-font-smoothing: antialiased;
 }
+
+h1, h2, h3, h4 { letter-spacing: -0.01em; }
 
 /* Full-page blurred Dust2 backdrop. A fixed pseudo-element keeps the blur on the
    background only — the content card on top stays perfectly sharp. Drop the map
@@ -56,8 +59,9 @@ h1 { margin-bottom: 0.25rem; }
     padding: 0.55rem 0.7rem;
     background: var(--card);
     border: 1px solid var(--line);
-    border-radius: 6px;
+    border-radius: 8px;
     color: var(--text);
+    font-family: inherit;
     font-size: 0.95rem;
 }
 .field input:focus { outline: none; border-color: var(--accent); }
@@ -70,12 +74,16 @@ button {
     background: var(--accent);
     color: #fff;
     border: none;
-    border-radius: 6px;
-    font-size: 1rem;
+    border-radius: 9px;
+    font-family: inherit;
+    font-size: 0.95rem;
     font-weight: 600;
+    letter-spacing: 0.01em;
     cursor: pointer;
+    transition: transform 0.08s ease, filter 0.15s ease, box-shadow 0.15s ease;
 }
-button:hover { filter: brightness(1.1); }
+button:hover { filter: brightness(1.08); box-shadow: 0 6px 18px rgba(255, 85, 0, 0.28); }
+button:active { transform: translateY(1px); box-shadow: none; }
 
 .submit-btn { display: flex; align-items: center; justify-content: center; gap: 0.5rem; }
 .submit-btn[disabled] { cursor: progress; opacity: 0.9; }
@@ -98,12 +106,12 @@ button:hover { filter: brightness(1.1); }
     background: transparent;
     color: var(--muted);
     border: 1px solid var(--line);
-    border-radius: 6px;
+    border-radius: 9px;
     font-size: 0.9rem;
     font-weight: 500;
     cursor: pointer;
 }
-.shuffle-btn:hover { filter: none; border-color: var(--accent); color: var(--text); }
+.shuffle-btn:hover { filter: none; border-color: var(--accent); color: var(--text); box-shadow: none; }
 
 .error {
     margin-top: 1.5rem;
@@ -130,6 +138,20 @@ button:hover { filter: brightness(1.1); }
 .bar-label { color: var(--muted); font-size: 0.85rem; margin-top: 0.4rem; }
 .bar-heading { font-size: 0.9rem; font-weight: 600; margin: 1rem 0 0.4rem; }
 .bar-sub { color: var(--muted); font-weight: 400; font-size: 0.8rem; }
+
+.players { display: flex; gap: 1.5rem; margin-top: 0.5rem; }
+.player-col { flex: 1; }
+.player-col h4 {
+    margin: 0 0 0.4rem; font-size: 1rem;
+    display: flex; justify-content: space-between; align-items: baseline;
+}
+.player-col .team-avg { color: var(--muted); font-weight: 400; font-size: 0.8rem; }
+.player-col ul { list-style: none; padding: 0; margin: 0; }
+.player-col li {
+    display: flex; justify-content: space-between;
+    padding: 0.3rem 0; border-bottom: 1px solid var(--line); font-size: 0.9rem;
+}
+.pelo { color: var(--accent); font-weight: 600; }
 
 table { width: 100%; border-collapse: collapse; margin-top: 0.5rem; }
 th, td { text-align: left; padding: 0.4rem 0.6rem; border-bottom: 1px solid var(--line); }

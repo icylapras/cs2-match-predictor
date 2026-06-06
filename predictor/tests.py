@@ -13,6 +13,7 @@ from .models import PredictionLog
 FAKE_STATS = {
     "username": "x",
     "player_id": "x",
+    "elo": 1500.0,
     "matches": 20,
     "kd": 1.0,
     "adr": 80.0,
@@ -65,4 +66,6 @@ class ViewTests(TestCase):
         self.assertEqual(response.status_code, 200)
         # A result section always renders this, regardless of coin-flip vs favored.
         self.assertContains(response, "win probability")
+        # Per-player Elo is shown in the result.
+        self.assertContains(response, "1500")
         self.assertEqual(PredictionLog.objects.count(), 1)

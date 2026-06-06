@@ -52,6 +52,28 @@
             · avg Elo {{ result.elo.elo_a }} vs {{ result.elo.elo_b }}</p>
         {% endif %}
 
+        {% if result.players_a %}
+        <h3>Players &amp; FACEIT Elo</h3>
+        <div class="players">
+            <div class="player-col">
+                <h4>Team A {% if result.elo %}<span class="team-avg">avg {{ result.elo.elo_a }}</span>{% endif %}</h4>
+                <ul>
+                {% for p in result.players_a %}
+                    <li><span class="pname">{{ p.name }}</span><span class="pelo">{{ p.elo|default:"–" }}</span></li>
+                {% endfor %}
+                </ul>
+            </div>
+            <div class="player-col">
+                <h4>Team B {% if result.elo %}<span class="team-avg">avg {{ result.elo.elo_b }}</span>{% endif %}</h4>
+                <ul>
+                {% for p in result.players_b %}
+                    <li><span class="pname">{{ p.name }}</span><span class="pelo">{{ p.elo|default:"–" }}</span></li>
+                {% endfor %}
+                </ul>
+            </div>
+        </div>
+        {% endif %}
+
         <h3>Team averages (recent form)</h3>
         <table>
             <thead><tr><th>Metric</th><th>Team A</th><th>Team B</th></tr></thead>
