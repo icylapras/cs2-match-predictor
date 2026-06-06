@@ -14,5 +14,18 @@
     "auc": 0.841,
     "ece": 0.187
   },
+  "walk_forward": {
+    "n_oos": 1856,
+    "model": {
+      "accuracy_pct": 75,
+      "auc": 0.812,
+      "ece": 0.074
+    },
+    "faceit_elo": {
+      "accuracy_pct": 76,
+      "auc": 0.81,
+      "ece": 0.136
+    }
+  },
   "generated": "2026-06-06"
 }

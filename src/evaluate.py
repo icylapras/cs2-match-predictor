@@ -490,45 +490,49 @@ def calibration_report(
         print(f"\nReliability diagram -> {out_png}")
 
 
-def walk_forward(
-    data: Path, features: Path, *, n_splits: int = 8, calibrated: bool = True
-) -> None:
+def _load_features_df(data: Path, features: Path) -> pd.DataFrame:
+    """Load matches + Elo features, merged and sorted chronologically."""
+    df = pd.read_csv(data).merge(pd.read_csv(features), on="match_id", how="inner")
+    df["date"] = pd.to_datetime(df["date"])
+    return df.sort_values(["date", "match_id"]).reset_index(drop=True)
+
+
+def _walk_forward_oos(df: pd.DataFrame, cols: list[str], *, n_splits: int = 8):
+    """Expanding-window out-of-sample predictions over the (sorted) data.
+
+    Returns (y_oos, p_model, p_elo, fold_aucs) pooled across every fold.
+    """
+    y = df["label"].to_numpy()
+    tscv = TimeSeriesSplit(n_splits=n_splits)
+    ys, pm, pe, fold_aucs = [], [], [], []
+    for tr, te in tscv.split(df):
+        model = CalibratedClassifierCV(
+            make_pipeline(StandardScaler(), LogisticRegression(max_iter=1000)),
+            method="isotonic", cv=5,
+        )
+        model.fit(df.iloc[tr][cols], y[tr])
+        p = model.predict_proba(df.iloc[te][cols])[:, 1]
+        sub = df.iloc[te]
+        e = sub.apply(
+            lambda r: elo_win_probability(r["faceit_elo_a"], r["faceit_elo_b"]), axis=1
+        ).to_numpy()
+        ys.append(y[te]); pm.append(p); pe.append(e); fold_aucs.append(_auc(y[te], p))
+    return np.concatenate(ys), np.concatenate(pm), np.concatenate(pe), fold_aucs
+
+
+def walk_forward(data: Path, features: Path, *, n_splits: int = 8) -> None:
     """Expanding-window (walk-forward) backtest — the rigorous version of a split.
 
     Instead of one 80/20 cut, we repeatedly train on all matches up to a point
     and predict the *next* block, sliding forward (sklearn TimeSeriesSplit). Every
     fold's predictions are out-of-sample, so pooling them tests the model on far
-    more matches (~n*(n_splits)/(n_splits+1)) than a single split — much tighter
-    error bars and a more realistic 'always predict the future from the past'.
+    more matches than a single split — much tighter error bars and a more realistic
+    'always predict the future from the past'.
     """
-    cols = STAT_COLS + FACEIT_COL
-    df = pd.read_csv(data).merge(pd.read_csv(features), on="match_id", how="inner")
-    df["date"] = pd.to_datetime(df["date"])
-    df = df.sort_values(["date", "match_id"]).reset_index(drop=True)
-    y = df["label"].to_numpy()
-
-    tscv = TimeSeriesSplit(n_splits=n_splits)
-    ys, p_model_parts, p_elo_parts, fold_aucs = [], [], [], []
-    for tr, te in tscv.split(df):
-        if calibrated:
-            model = CalibratedClassifierCV(
-                make_pipeline(StandardScaler(), LogisticRegression(max_iter=1000)),
-                method="isotonic", cv=5,
-            )
-        else:
-            model = make_pipeline(StandardScaler(), LogisticRegression(max_iter=1000))
-        model.fit(df.iloc[tr][cols], y[tr])
-        pm = model.predict_proba(df.iloc[te][cols])[:, 1]
-        sub = df.iloc[te]
-        pe = sub.apply(
-            lambda r: elo_win_probability(r["faceit_elo_a"], r["faceit_elo_b"]), axis=1
-        ).to_numpy()
-        ys.append(y[te]); p_model_parts.append(pm); p_elo_parts.append(pe)
-        fold_aucs.append(_auc(y[te], pm))
-
-    y_oos = np.concatenate(ys)
-    p_model = np.concatenate(p_model_parts)
-    p_elo = np.concatenate(p_elo_parts)
+    df = _load_features_df(data, features)
+    y_oos, p_model, p_elo, fold_aucs = _walk_forward_oos(
+        df, STAT_COLS + FACEIT_COL, n_splits=n_splits
+    )
 
     print("\n" + "=" * 78)
     print(f"WALK-FORWARD BACKTEST — {n_splits} expanding folds, "
@@ -579,6 +583,14 @@ def write_metrics(
             "ece": round(_ece(y_te, p), 3),
         }
 
+    # Walk-forward backtest, pooled across folds — the more-data validation.
+    y_wf, pm_wf, pe_wf, _ = _walk_forward_oos(_load_features_df(data, features), cols)
+
+    def wf_block(p) -> dict:
+        s = _scores(y_wf, p)
+        return {"accuracy_pct": round(s["acc"] * 100), "auc": round(s["auc"], 3),
+                "ece": round(_ece(y_wf, p), 3)}
+
     metrics = {
         "n_train": len(train_df),
         "n_test": len(test_df),
@@ -587,6 +599,11 @@ def write_metrics(
         "test_to": str(test_df["date"].max().date()),
         "model": block(p_model),
         "faceit_elo": block(p_elo),
+        "walk_forward": {
+            "n_oos": int(len(y_wf)),
+            "model": wf_block(pm_wf),
+            "faceit_elo": wf_block(pe_wf),
+        },
         "generated": datetime.date.today().isoformat(),
     }
     out.parent.mkdir(parents=True, exist_ok=True)
