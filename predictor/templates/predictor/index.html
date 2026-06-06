@@ -46,7 +46,7 @@
         <p class="bar-label">Team A win probability: {{ result.prob_a_pct }}%</p>
 
         {% if result.elo %}
-        <p class="bar-heading">FACEIT Elo <span class="bar-sub">— raw rating, no model</span></p>
+        <p class="bar-heading">FACEIT Elo <span class="bar-sub">(using standard Elo formula)</span></p>
         <div class="bar"><div class="bar-fill elo" style="width: {{ result.elo.prob_a_pct }}%"></div></div>
         <p class="bar-label">Team A win probability: {{ result.elo.prob_a_pct }}%
             · avg Elo {{ result.elo.elo_a }} vs {{ result.elo.elo_b }}</p>
