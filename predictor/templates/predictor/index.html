@@ -17,7 +17,12 @@
             {% endfor %}
         </div>
     </div>
-    <button type="submit">Predict winner</button>
+    <button type="submit" class="submit-btn">
+        <span class="spinner" aria-hidden="true"></span>
+        <span class="btn-label">Predict winner</span>
+    </button>
+    <p class="loading-note" hidden>Fetching 10 players from FACEIT — the first
+        prediction can take a few seconds.</p>
 </form>
 
 {% if error %}
@@ -86,6 +91,24 @@
             if (e.key === "Enter" || e.key === " ") { e.preventDefault(); fillTeams(item); }
         });
     });
+
+    // Show a spinner while the prediction request is in flight. The submit
+    // event only fires once the browser's required-field validation passes,
+    // so the spinner never appears on an incomplete form.
+    var form = document.querySelector(".match-form");
+    if (form) {
+        form.addEventListener("submit", function () {
+            var btn = form.querySelector(".submit-btn");
+            if (btn) {
+                btn.classList.add("loading");
+                btn.disabled = true;
+                var label = btn.querySelector(".btn-label");
+                if (label) { label.textContent = "Predicting…"; }
+            }
+            var note = form.querySelector(".loading-note");
+            if (note) { note.hidden = false; }
+        });
+    }
 })();
 </script>
 {% endblock %}
