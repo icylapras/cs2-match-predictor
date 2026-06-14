@@ -22,6 +22,7 @@
         <span class="btn-label">Predict winner</span>
     </button>
     <button type="button" class="shuffle-btn" id="shuffle-btn">Shuffle lineup</button>
+    <button type="button" class="shuffle-btn" id="random-btn">Random real players</button>
     <p class="loading-note" hidden>Fetching 10 players from FACEIT — the first
         prediction can take a few seconds.</p>
 </form>
@@ -106,7 +107,8 @@
 <section class="track-record">
     <h3>How accurate is it? <span class="tr-vs">vs FACEIT Elo</span></h3>
     <p class="tr-sub">Tested on <strong>{{ metrics.n_test }} real FACEIT matches</strong> the model
-        never saw during training (out-of-time: trained on older games, scored on newer ones).</p>
+        never saw during training — held out from the full {{ metrics.n_total }}-match dataset
+        (out-of-time: trained on older games, scored on newer ones).</p>
     <table class="tr-table">
         <thead><tr><th>Predictor</th><th>Accuracy</th><th>AUC</th><th>Calibration<br><span class="tr-small">(ECE, lower=better)</span></th></tr></thead>
         <tbody>
@@ -198,6 +200,31 @@
                     slot++;
                 }
             });
+        });
+    }
+
+    // "Random real players" — fetch 10 nicknames from FACEIT's CS2
+    // leaderboards (any of thousands of real, active players), no page reload.
+    var randomBtn = document.getElementById("random-btn");
+    if (randomBtn) {
+        var randomLabel = randomBtn.textContent;
+        randomBtn.addEventListener("click", function () {
+            randomBtn.disabled = true;
+            randomBtn.textContent = "Fetching players…";
+            fetch("{% url 'predictor:random_lineup' %}")
+                .then(function (resp) { return resp.json(); })
+                .then(function (data) {
+                    if (data.error) { throw new Error(data.error); }
+                    Object.keys(data).forEach(function (field) {
+                        var input = document.getElementById("id_" + field);
+                        if (input) { input.value = data[field]; }
+                    });
+                    randomBtn.textContent = randomLabel;
+                })
+                .catch(function () {
+                    randomBtn.textContent = "Couldn't fetch players — try again";
+                })
+                .finally(function () { randomBtn.disabled = false; });
         });
     }
 

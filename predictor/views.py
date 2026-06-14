@@ -1,9 +1,10 @@
+from django.http import JsonResponse
 from django.shortcuts import render
 
-from src.faceit_api import FaceitError
+from src.faceit_api import FaceitError, random_ranked_players
 from src.features import FEATURE_KEYS
 
-from .forms import DEMO_NICKNAMES, MatchForm, random_lineup_initial
+from .forms import DEMO_NICKNAMES, TEAM_SIZE, MatchForm, field_names, random_lineup_initial
 from .models import PredictionLog
 from .services import get_metrics, run_prediction
 
@@ -84,3 +85,17 @@ def index(request):
 
     context["form"] = form
     return render(request, "predictor/index.html", context)
+
+
+def random_lineup(request):
+    """AJAX endpoint: 10 nicknames of real, currently-ranked CS2 players.
+
+    Used by the "Random real players" button — unlike the demo-pool shuffle,
+    this hits the FACEIT leaderboards so it can return any of thousands of
+    real, currently-active players.
+    """
+    try:
+        picks = random_ranked_players(2 * TEAM_SIZE)
+    except FaceitError as exc:
+        return JsonResponse({"error": str(exc)}, status=502)
+    return JsonResponse(dict(zip(field_names(), picks)))

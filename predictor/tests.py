@@ -69,3 +69,20 @@ class ViewTests(TestCase):
         # Per-player Elo is shown in the result.
         self.assertContains(response, "1500")
         self.assertEqual(PredictionLog.objects.count(), 1)
+
+
+class RandomLineupTests(TestCase):
+    @patch("predictor.views.random_ranked_players", return_value=[f"p{i}" for i in range(10)])
+    def test_returns_ten_named_fields(self, _mock):
+        response = self.client.get(reverse("predictor:random_lineup"))
+        self.assertEqual(response.status_code, 200)
+        data = response.json()
+        self.assertEqual(set(data), {f"{side}{i}" for side in "ab" for i in range(1, 6)})
+        self.assertEqual(data["a1"], "p0")
+        self.assertEqual(data["b5"], "p9")
+
+    @patch("predictor.views.random_ranked_players", side_effect=FaceitError("boom"))
+    def test_faceit_error_returns_502(self, _mock):
+        response = self.client.get(reverse("predictor:random_lineup"))
+        self.assertEqual(response.status_code, 502)
+        self.assertIn("error", response.json())

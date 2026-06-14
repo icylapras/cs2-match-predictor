@@ -11,6 +11,7 @@ https://developers.faceit.com/ -> Apps -> create app -> API Keys.
 from __future__ import annotations
 
 import os
+import random
 import time
 from typing import Any
 
@@ -27,6 +28,10 @@ API_BASE = "https://open.faceit.com/data/v4"
 GAME_ID = "cs2"
 DEFAULT_LIMIT = 20
 TIMEOUT = 15  # seconds
+
+# Regions with populated CS2 leaderboards (AS/OC/AF/WORLD return empty).
+RANKING_REGIONS = ("EU", "NA", "SA")
+RANKING_MAX_OFFSET = 10000  # each region's leaderboard runs at least this deep
 
 
 class FaceitError(RuntimeError):
@@ -191,6 +196,35 @@ def get_player_stats(
         "elo": profile["elo"],
         **aggregate_stats(items),
     }
+
+
+def random_ranked_players(count: int, *, api_key: str | None = None) -> list[str]:
+    """Return ``count`` nicknames of real, currently-ranked CS2 players.
+
+    Used to seed the web form with a genuinely random matchup, rather than
+    picking from the small fixed demo pool: each pick is a random offset into
+    one of FACEIT's regional CS2 leaderboards (EU/NA/SA, each ~10k+ ranked
+    players deep), so every nickname is real, currently active, and has
+    recent match history.
+    """
+    session = _session(api_key)
+    nicknames: set[str] = set()
+    attempts = 0
+    while len(nicknames) < count and attempts < count * 5:
+        attempts += 1
+        region = random.choice(RANKING_REGIONS)
+        offset = random.randint(0, RANKING_MAX_OFFSET)
+        data = _get(
+            session,
+            f"/rankings/games/{GAME_ID}/regions/{region}",
+            params={"limit": 1, "offset": offset},
+        )
+        items = data.get("items") or []
+        if items:
+            nicknames.add(items[0]["nickname"])
+    if len(nicknames) < count:
+        raise FaceitError("Could not fetch enough random ranked players from FACEIT.")
+    return list(nicknames)
 
 
 if __name__ == "__main__":

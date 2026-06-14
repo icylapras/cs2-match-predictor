@@ -7,7 +7,7 @@ and by how much.
 Usage (comma-separated so nicknames starting with '-' are safe):
     python -m src.predict \
         --team-a 's1mple-_---,cigarette66,-ZeroSanity-,Ezio_-,_Ghani_' \
-        --team-b '--VerGiL-,-Murphy1337,ropz,-WARDELL,SupaWashed'
+        --team-b '--VerGiL-,-Murphy1337,ropz,-WARDELL,ZywOo'
 """
 
 from __future__ import annotations
