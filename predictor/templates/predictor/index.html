@@ -139,7 +139,8 @@
         <li><strong>Compare the two teams.</strong> We take the gap between the teams'
             <strong>average FACEIT Elo</strong> (the main skill signal) plus the
             difference in each form stat (Team&nbsp;A minus Team&nbsp;B).</li>
-        <li><strong>Predict.</strong> A machine-learning model, trained on ~2,000 real
+        <li><strong>Predict.</strong> A machine-learning model, trained on
+            {% if metrics %}{{ metrics.n_total }}{% else %}thousands of{% endif %} real
             historical FACEIT matches, combines the Elo gap and the form stats into a
             calibrated win probability — the orange bar above.</li>
     </ol>
@@ -149,7 +150,7 @@
         trying to predict. It is then tested <em>out-of-time</em> — trained on older
         matches and scored on newer ones it has never seen, and its probabilities are
         <em>calibrated</em> (a "70%" really wins about 70% of the time). Accuracy is
-        ~78% across typical matchups but closer to <strong>60%</strong> when the two
+        ~70% across typical matchups but closer to <strong>60%</strong> when the two
         teams are evenly matched — CS2 has real upsets, so this is an honest fun tool,
         not a betting product.</p>
     <p class="how-rigor"><strong>The blue bar</strong> is a model-free baseline: the
