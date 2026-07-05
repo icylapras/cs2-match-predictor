@@ -65,7 +65,7 @@ def enrich_rosters(
     have: dict[str, dict] = {}
     if resume and out.exists():
         existing = pd.read_csv(out, dtype=str)
-        have = {r["match_id"]: r for _, r in existing.iterrows()}
+        have = {rec["match_id"]: rec for rec in existing.to_dict("records")}
         print(f"Resuming roster cache: {len(have)} already fetched")
 
     session = _session()
