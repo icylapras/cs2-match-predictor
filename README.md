@@ -41,23 +41,27 @@ honest result.
 
 ## Results
 
-On **2,091 real FACEIT matches** (chronological split; 419 held-out test matches
-the model never saw during training):
+On **5,000 real FACEIT matches** (chronological split; the newest 1,000 are
+held-out test matches the model never saw during training):
 
 | Predictor | Accuracy | AUC | Calibration (ECE) |
 |---|---|---|---|
-| **Our model** (stats + FACEIT Elo, isotonic-calibrated) | 78% | **0.843** | **0.078** |
-| FACEIT Elo formula (baseline) | 79% | 0.841 | 0.187 |
+| **Our model** (stats + FACEIT Elo, isotonic-calibrated) | 69% | **0.753** | **0.032** |
+| FACEIT Elo formula (baseline) | 70% | 0.745 | 0.072 |
 
-The model is about as accurate as FACEIT Elo on ranking, but its probabilities
-are far better **calibrated** (ECE 0.19 → 0.08 — a "70%" really wins ~70% of the
-time). These figures are shown live on the site and regenerated on every retrain.
+The model is about as accurate as FACEIT Elo on ranking (AUC +0.007, not
+statistically significant), but its probabilities are far better **calibrated**
+(ECE 0.07 → 0.03 — a "70%" really wins ~70% of the time). A **walk-forward
+backtest** (8 expanding-window folds, 4,440 out-of-sample predictions) confirms
+the same picture: model AUC 0.744 vs Elo 0.743, with the calibration edge intact
+(ECE 0.033 vs 0.065). These figures are shown live on the site and regenerated
+on every retrain.
 
 ![Reliability diagram](reports/reliability.png)
 
-> ~78% accuracy reflects that real matchups are often lopsided (easy to call from
-> the Elo gap). On *evenly matched* teams accuracy is closer to ~60% — the honest
-> ceiling for this problem.
+> ~70% accuracy reflects that arbitrary matchups are often lopsided (easy to
+> call from the Elo gap). On *evenly matched* teams accuracy is closer to ~60% —
+> the honest ceiling for this problem.
 
 ## Architecture
 
@@ -137,7 +141,7 @@ Rebuild the dataset and model from scratch (needs the API key):
 
 ```bash
 # crawl matches, build Elo features, train (isotonic-calibrated), evaluate
-.venv/bin/python -m src.dataset --seed='<nickname>' --target=2500 --per-player=30
+.venv/bin/python -m src.dataset --seed='<nickname>' --target=5000 --per-player=30
 .venv/bin/python -m src.elo --data data/processed/matches.csv
 .venv/bin/python -m src.train
 .venv/bin/python -m src.evaluate                 # model vs Elo vs naive + significance
@@ -156,8 +160,11 @@ Run the tests:
 
 ## Limitations & future work
 
-- **More data.** 2,091 matches gives a ~419-match test set; a larger crawl would
-  tighten the confidence intervals further.
+- **Point-in-time Elo.** FACEIT exposes only each player's *current* Elo, so the
+  Elo feature is a snapshot taken at crawl time — mild look-ahead on the oldest
+  matches. The dataset spans a few weeks so drift is limited, and the effect is
+  smallest on the (newest) test matches, but it is not zero; future crawls
+  snapshot Elo immediately.
 - **Remaining feature ideas.** Per-map skill and momentum/recent-trend are the
   orthogonal signals not yet tested (they need richer per-match history).
 - **Live backtest.** Continuously validate on newly finished matches for a

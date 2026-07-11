@@ -1,6 +1,9 @@
 # Secrets
 .env
 
+# Crawl / run logs
+*.log
+
 # Python
 __pycache__/
 *.pyc
