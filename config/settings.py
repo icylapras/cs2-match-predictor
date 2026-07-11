@@ -38,11 +38,14 @@ DEBUG = os.environ.get("DJANGO_DEBUG", "1") == "1"
 
 ALLOWED_HOSTS = os.environ.get("DJANGO_ALLOWED_HOSTS", "localhost,127.0.0.1").split(",")
 
-# Render provides the app's public hostname here; trust it automatically so
-# the site works without hand-editing ALLOWED_HOSTS on deploy.
-_render_host = os.environ.get("RENDER_EXTERNAL_HOSTNAME")
-if _render_host:
-    ALLOWED_HOSTS.append(_render_host)
+# Render and Azure App Service provide the app's public hostname in these
+# variables; trust them automatically so the site works without hand-editing
+# ALLOWED_HOSTS on deploy.
+_platform_host = os.environ.get("RENDER_EXTERNAL_HOSTNAME") or os.environ.get(
+    "WEBSITE_HOSTNAME"
+)
+if _platform_host:
+    ALLOWED_HOSTS.append(_platform_host)
 
 
 # Application definition
@@ -169,6 +172,9 @@ DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'
 CSRF_TRUSTED_ORIGINS = [
     o for o in os.environ.get("DJANGO_CSRF_TRUSTED_ORIGINS", "").split(",") if o
 ]
+# Trust the platform-provided hostname for form posts too (matches ALLOWED_HOSTS).
+if _platform_host:
+    CSRF_TRUSTED_ORIGINS.append(f"https://{_platform_host}")
 
 if not DEBUG:
     # Render terminates HTTPS at its proxy and forwards this header.
