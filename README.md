@@ -12,6 +12,8 @@ Built end-to-end: a **leakage-safe ML pipeline** (FACEIT API → features → mo
 → evaluation) and a **Django web app** with a caching layer and persistence,
 both sharing the same prediction core.
 
+![The app predicting a match from ten FACEIT nicknames](docs/screenshot.png)
+
 ---
 
 ## Methods
@@ -115,6 +117,7 @@ config/                 # Django project (settings, urls)
 predictor/              # Django app: views, forms, services (cache+model+metrics), tests
 data/processed/         # committed: matches.csv, best_model.joblib, elo_features.csv, metrics.json
 reports/                # reliability diagram
+docs/                   # screenshot used in this README
 ```
 
 ## Getting started
