@@ -4,7 +4,24 @@
 <head>
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
-    <title>CS2 Match Predictor</title>
+    <title>{% block title %}CS2 Match Predictor{% endblock %}</title>
+    {# Keep meta content on one line — some link scrapers parse it with naive regexes. #}
+    <meta name="description" content="Predict a Counter-Strike 2 match from ten FACEIT usernames. A leakage-safe, out-of-time-validated model returns a calibrated win probability.">
+
+    {# Link previews (LinkedIn, Discord, Slack, X). Scrapers need absolute
+       URLs, so these are built from the live request rather than hardcoded. #}
+    <meta property="og:type" content="website">
+    <meta property="og:site_name" content="CS2 Match Predictor">
+    <meta property="og:title" content="CS2 Match Predictor">
+    <meta property="og:description" content="Predict a Counter-Strike 2 match from ten FACEIT usernames — a calibrated win probability from a leakage-safe model.">
+    <meta property="og:url" content="{{ request.build_absolute_uri }}">
+    <meta property="og:image" content="{{ request.scheme }}://{{ request.get_host }}{% static 'predictor/og-image.jpg' %}">
+    <meta property="og:image:width" content="1200">
+    <meta property="og:image:height" content="675">
+    <meta property="og:image:alt" content="The CS2 Match Predictor app showing a predicted match result">
+    <meta name="twitter:card" content="summary_large_image">
+
+    <link rel="icon" href="{% static 'predictor/favicon.svg' %}" type="image/svg+xml">
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Rajdhani:wght@400;500;600;700&family=Teko:wght@500;600&display=swap">
@@ -13,7 +30,8 @@
 <body>
     <main class="container">
         <h1>CS2 Match Predictor</h1>
-        <p class="subtitle">Enter five FACEIT nicknames per team. Names must be exact.</p>
+        {% block subtitle %}<p class="subtitle">Enter five FACEIT nicknames per team.
+            Names must be exact.</p>{% endblock %}
         {% block content %}{% endblock %}
         <footer>
             Predictions reflect the skill gap between teams.

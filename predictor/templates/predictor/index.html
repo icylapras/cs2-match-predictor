@@ -125,10 +125,17 @@
     <p class="tr-note">The probabilities are <em>calibrated</em>, not just ranked — a "70%" really
         wins about 70% of the time.</p>
     {% if metrics.walk_forward %}
-    <p class="tr-note">Cross-checked with a <strong>walk-forward backtest</strong> over
-        {{ metrics.walk_forward.n_oos }} out-of-sample matches (train on the past, predict the
-        next block, repeat): AUC {{ metrics.walk_forward.model.auc }}, calibration ECE
-        {{ metrics.walk_forward.model.ece }}.</p>
+    <div class="tr-backtest">
+        <h4>Walk-forward backtest</h4>
+        <p>Train on the past, predict the next block, repeat — over
+            <strong>{{ metrics.walk_forward.n_oos }}</strong> out-of-sample matches,
+            the held-out figures above hold up:</p>
+        <p class="tr-backtest-figures">
+            <span>AUC <strong>{{ metrics.walk_forward.model.auc }}</strong></span>
+            <span>ECE <strong>{{ metrics.walk_forward.model.ece }}</strong></span>
+            <span>Accuracy <strong>{{ metrics.walk_forward.model.accuracy_pct }}%</strong></span>
+        </p>
+    </div>
     {% endif %}
 </section>
 {% endif %}

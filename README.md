@@ -1,26 +1,69 @@
 # CS2 Match Predictor
 
-Predict the winner of a Counter-Strike 2 match from the 10 players' FACEIT
-usernames. Enter two teams of five; the app combines each team's **average
-FACEIT Elo** with their **recent-form stats** (K/D, ADR, headshot %, win rate)
-and returns a **calibrated** win probability.
+**Do recent-form stats predict Counter-Strike matches any better than raw skill
+rating alone? I built the pipeline to answer that properly — and the answer is
+no. Here is how I know.**
+
+Enter ten FACEIT usernames, five per team, and the app returns a **calibrated**
+win probability. Behind it: a **leakage-safe ML pipeline** (FACEIT API →
+features → model → evaluation) and a **Django web app**, sharing one scoring
+path.
 
 **Live:** https://cs2-match-predictor.onrender.com
 (free tier — the first request after it's been idle takes ~30s to wake up)
-
-Built end-to-end: a **leakage-safe ML pipeline** (FACEIT API → features → model
-→ evaluation) and a **Django web app** with a caching layer and persistence,
-both sharing the same prediction core.
 
 ![The app predicting a match from ten FACEIT nicknames](docs/screenshot.png)
 
 ---
 
-## Methods
+## The finding
 
-Most "predict the winner" projects quietly leak future information and report
-implausibly high accuracy. This one is deliberately rigorous and reports the
-honest result.
+On 5,000 real FACEIT matches, **FACEIT Elo turns out to be a near-complete
+predictor.** Recent-form stats (K/D, ADR, headshot %, win rate) — plus four
+further orthogonal features built and tested, including a leakage-safe teammate
+"stacking" signal that separates a coordinated 5-stack from five strangers at
+the same rating — add **no statistically significant ranking value** on top of
+it:
+
+> **AUC +0.007** over the Elo formula · 95% CI **[−0.001, +0.016]** ·
+> DeLong **p = 0.09** → not significant at 5%
+
+That is a negative result, and reporting it is the point. Most "predict the
+winner" projects quietly leak future information into their features and report
+implausibly high accuracy. This one is leakage-safe by construction, scored
+out-of-time, and significance-tested — which is exactly why it reports a
+smaller number that happens to be real.
+
+**Where the model does win is calibration.** Isotonic regression takes Expected
+Calibration Error from **0.072 → 0.032**: a "70%" from this model really wins
+about 70% of the time, which the raw Elo formula cannot claim. For anything you
+would actually *do* with a probability, that is the property that matters.
+
+## Results
+
+On **5,000 real FACEIT matches** (chronological split; the newest 1,000 are
+held-out test matches the model never saw during training):
+
+| Predictor | Accuracy | AUC | Calibration (ECE) |
+|---|---|---|---|
+| **Our model** (stats + FACEIT Elo, isotonic-calibrated) | 69% | **0.753** | **0.032** |
+| FACEIT Elo formula (baseline) | 70% | 0.745 | 0.072 |
+
+A **walk-forward backtest** (8 expanding-window folds, 4,440 out-of-sample
+predictions) confirms the same picture: model AUC 0.744 vs Elo 0.743, with the
+calibration edge intact (ECE 0.033 vs 0.065). These figures are shown live on
+the site and regenerated on every retrain.
+
+![Reliability diagram](reports/reliability.png)
+
+> ~70% accuracy reflects that arbitrary matchups are often lopsided (easy to
+> call from the Elo gap). On *evenly matched* teams accuracy is closer to ~60% —
+> the honest ceiling for this problem.
+
+## How the number is kept honest
+
+The finding above is only worth anything if the evaluation is trustworthy, so
+that is where most of the work went.
 
 - **Leakage-safe by construction.** A match's stat features use *only* each
   player's matches that finished **before** that match
@@ -33,37 +76,13 @@ honest result.
 - **Significance testing.** Differences in AUC are tested with a **paired
   bootstrap confidence interval** and **DeLong's test**, so "better" means
   statistically better, not noise (`src/evaluate.py`).
-- **Calibration.** Beyond ranking, the probabilities are measured with log-loss,
-  Brier score and **Expected Calibration Error (ECE)**, and sharpened with
-  **isotonic regression** (reliability diagram below).
-- **Honest result.** FACEIT Elo turns out to be a near-complete predictor:
-  recent-form stats — and four other orthogonal features that were tested and
-  rejected — add no statistically significant *ranking* value. The model's real,
-  measured edge over the raw Elo formula is **calibration**.
-
-## Results
-
-On **5,000 real FACEIT matches** (chronological split; the newest 1,000 are
-held-out test matches the model never saw during training):
-
-| Predictor | Accuracy | AUC | Calibration (ECE) |
-|---|---|---|---|
-| **Our model** (stats + FACEIT Elo, isotonic-calibrated) | 69% | **0.753** | **0.032** |
-| FACEIT Elo formula (baseline) | 70% | 0.745 | 0.072 |
-
-The model is about as accurate as FACEIT Elo on ranking (AUC +0.007, not
-statistically significant), but its probabilities are far better **calibrated**
-(ECE 0.07 → 0.03 — a "70%" really wins ~70% of the time). A **walk-forward
-backtest** (8 expanding-window folds, 4,440 out-of-sample predictions) confirms
-the same picture: model AUC 0.744 vs Elo 0.743, with the calibration edge intact
-(ECE 0.033 vs 0.065). These figures are shown live on the site and regenerated
-on every retrain.
-
-![Reliability diagram](reports/reliability.png)
-
-> ~70% accuracy reflects that arbitrary matchups are often lopsided (easy to
-> call from the Elo gap). On *evenly matched* teams accuracy is closer to ~60% —
-> the honest ceiling for this problem.
+- **Calibration measured, not assumed.** Probabilities are scored with
+  log-loss, Brier score and **Expected Calibration Error**, then sharpened with
+  **isotonic regression** (reliability diagram above).
+- **Cross-checked leakage-free.** Because FACEIT exposes only *current* Elo, the
+  Elo feature is a crawl-time snapshot; the same comparison is re-run against a
+  from-scratch **Elo replay** computed chronologically from match results
+  (`src/elo.py::replay`), which has no look-ahead at all.
 
 ## Architecture
 
@@ -87,6 +106,12 @@ on every retrain.
 
 The ML logic lives in `src/` and knows nothing about the web. The Django app is
 a thin layer over it that adds production concerns.
+
+The CLI and the web app score through the same `predict_from_stats()`, and
+dataset-building and inference construct their feature rows from the same
+primitives in `src/features.py` against one shared `MODEL_FEATURE_COLS` column
+list and order — so a feature vector means the same thing at training time and
+at serving time, by construction rather than by discipline.
 
 ### Scaling decision: caching the slow external API
 

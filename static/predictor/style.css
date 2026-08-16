@@ -255,6 +255,31 @@ th { color: var(--muted); font-weight: 600; text-transform: uppercase; letter-sp
 }
 .tr-stat-label .tr-small { font-weight: 500; font-size: 0.72rem; text-transform: none; letter-spacing: normal; }
 .track-record .tr-note { color: var(--muted); font-size: 0.9rem; margin: 0.9rem 0 0; }
+/* Second, independent validation — given its own block so it reads as a
+   separate check rather than a footnote to the headline numbers. */
+.tr-backtest {
+    margin-top: 1.1rem; padding-top: 1rem;
+    border-top: 1px solid var(--line);
+}
+.tr-backtest h4 { margin: 0 0 0.35rem; color: var(--text); font-size: 0.9rem; }
+.tr-backtest p { color: var(--muted); font-size: 0.9rem; margin: 0; }
+.tr-backtest-figures {
+    display: flex; flex-wrap: wrap; gap: 0.4rem 1.5rem;
+    margin-top: 0.6rem !important;
+}
+.tr-backtest-figures strong {
+    color: var(--accent); font-variant-numeric: tabular-nums;
+    font-size: 1.05rem; margin-left: 0.15rem;
+}
+
+.notfound { text-align: center; padding: 2rem 0 3rem; }
+.notfound-code {
+    font-family: "Teko", "Rajdhani", sans-serif; font-size: 5rem; line-height: 1;
+    color: var(--accent); margin: 0;
+}
+.notfound h2 { margin: 0.2rem 0 0.6rem; }
+.notfound p { color: var(--muted); margin: 0 0 0.6rem; }
+.notfound-link { color: var(--accent); font-weight: 600; }
 
 .how-it-works {
     margin-top: 2.5rem;
