@@ -26,7 +26,6 @@
     <p class="loading-note" hidden>Fetching 10 players from FACEIT — the first
         prediction can take a few seconds.</p>
 </form>
-{{ demo_nicknames|json_script:"demo-nicknames" }}
 
 {% if error %}
     <div class="error"><strong>Couldn't predict:</strong><pre>{{ error }}</pre></div>
@@ -105,27 +104,31 @@
 
 {% if metrics %}
 <section class="track-record">
-    <h3>How accurate is it? <span class="tr-vs">vs FACEIT Elo</span></h3>
+    <h3>How accurate is it?</h3>
     <p class="tr-sub">Tested on <strong>{{ metrics.n_test }} real FACEIT matches</strong> the model
         never saw during training — held out from the full {{ metrics.n_total }}-match dataset
         (out-of-time: trained on older games, scored on newer ones).</p>
-    <table class="tr-table">
-        <thead><tr><th>Predictor</th><th>Accuracy</th><th>AUC</th><th>Calibration<br><span class="tr-small">(ECE, lower=better)</span></th></tr></thead>
-        <tbody>
-            <tr class="tr-model"><td>Our model</td><td>{{ metrics.model.accuracy_pct }}%</td>
-                <td>{{ metrics.model.auc }}</td><td>{{ metrics.model.ece }}</td></tr>
-            <tr><td>FACEIT Elo formula</td><td>{{ metrics.faceit_elo.accuracy_pct }}%</td>
-                <td>{{ metrics.faceit_elo.auc }}</td><td>{{ metrics.faceit_elo.ece }}</td></tr>
-        </tbody>
-    </table>
-    <p class="tr-note">The model is about as accurate as FACEIT Elo, but its probabilities are far
-        better <em>calibrated</em> — a "70%" really wins about 70% of the time.</p>
+    <ul class="tr-stats">
+        <li>
+            <span class="tr-stat-value">{{ metrics.model.accuracy_pct }}%</span>
+            <span class="tr-stat-label">Accuracy</span>
+        </li>
+        <li>
+            <span class="tr-stat-value">{{ metrics.model.auc }}</span>
+            <span class="tr-stat-label">AUC</span>
+        </li>
+        <li>
+            <span class="tr-stat-value">{{ metrics.model.ece }}</span>
+            <span class="tr-stat-label">Calibration <span class="tr-small">(ECE, lower=better)</span></span>
+        </li>
+    </ul>
+    <p class="tr-note">The probabilities are <em>calibrated</em>, not just ranked — a "70%" really
+        wins about 70% of the time.</p>
     {% if metrics.walk_forward %}
     <p class="tr-note">Cross-checked with a <strong>walk-forward backtest</strong> over
         {{ metrics.walk_forward.n_oos }} out-of-sample matches (train on the past, predict the
-        next block, repeat): model AUC {{ metrics.walk_forward.model.auc }} vs FACEIT Elo
-        {{ metrics.walk_forward.faceit_elo.auc }}, calibration ECE
-        {{ metrics.walk_forward.model.ece }} vs {{ metrics.walk_forward.faceit_elo.ece }}.</p>
+        next block, repeat): AUC {{ metrics.walk_forward.model.auc }}, calibration ECE
+        {{ metrics.walk_forward.model.ece }}.</p>
     {% endif %}
 </section>
 {% endif %}
@@ -151,8 +154,7 @@
         matches and scored on newer ones it has never seen, and its probabilities are
         <em>calibrated</em> (a "70%" really wins about 70% of the time). Accuracy is
         ~70% across typical matchups but closer to <strong>60%</strong> when the two
-        teams are evenly matched — CS2 has real upsets, so this is an honest fun tool,
-        not a betting product.</p>
+        teams are evenly matched.</p>
     <p class="how-rigor"><strong>The blue bar</strong> is a model-free baseline: the
         standard Elo formula applied to the players' current FACEIT Elo. Showing it
         next to the model lets you see whether the model adds anything over the raw
@@ -181,26 +183,29 @@
         });
     });
 
-    // "Shuffle lineup" — re-randomize the 10 fields from the demo pool,
-    // no page reload. Same field ids as the recent-prediction fill above.
-    var poolEl = document.getElementById("demo-nicknames");
-    var shuffleBtn = document.getElementById("shuffle-btn");
-    if (poolEl && shuffleBtn) {
-        var pool = JSON.parse(poolEl.textContent);
-        shuffleBtn.addEventListener("click", function () {
-            var picks = pool.slice();
-            for (var i = picks.length - 1; i > 0; i--) {  // Fisher-Yates
-                var j = Math.floor(Math.random() * (i + 1));
-                var tmp = picks[i]; picks[i] = picks[j]; picks[j] = tmp;
+    // "Shuffle lineup" — redraw the teams from the names already in the boxes,
+    // so it reshuffles whatever the user (or "Random real players") put there.
+    function lineupInputs() {
+        var inputs = [];
+        ["a", "b"].forEach(function (side) {
+            for (var n = 1; n <= 5; n++) {
+                var input = document.getElementById("id_" + side + n);
+                if (input) { inputs.push(input); }
             }
-            var slot = 0;
-            ["a", "b"].forEach(function (side) {
-                for (var n = 1; n <= 5; n++) {
-                    var input = document.getElementById("id_" + side + n);
-                    if (input && picks[slot] !== undefined) { input.value = picks[slot]; }
-                    slot++;
-                }
-            });
+        });
+        return inputs;
+    }
+
+    var shuffleBtn = document.getElementById("shuffle-btn");
+    if (shuffleBtn) {
+        shuffleBtn.addEventListener("click", function () {
+            var inputs = lineupInputs();
+            var names = inputs.map(function (input) { return input.value; });
+            for (var i = names.length - 1; i > 0; i--) {  // Fisher-Yates
+                var j = Math.floor(Math.random() * (i + 1));
+                var tmp = names[i]; names[i] = names[j]; names[j] = tmp;
+            }
+            inputs.forEach(function (input, idx) { input.value = names[idx]; });
         });
     }
 

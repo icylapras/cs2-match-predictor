@@ -201,11 +201,10 @@ def get_player_stats(
 def random_ranked_players(count: int, *, api_key: str | None = None) -> list[str]:
     """Return ``count`` nicknames of real, currently-ranked CS2 players.
 
-    Used to seed the web form with a genuinely random matchup, rather than
-    picking from the small fixed demo pool: each pick is a random offset into
-    one of FACEIT's regional CS2 leaderboards (EU/NA/SA, each ~10k+ ranked
-    players deep), so every nickname is real, currently active, and has
-    recent match history.
+    Used to fill the web form with a genuinely random matchup: each pick is a
+    random offset into one of FACEIT's regional CS2 leaderboards (EU/NA/SA,
+    each ~10k+ ranked players deep), so every nickname is real, currently
+    active, and has recent match history.
     """
     session = _session(api_key)
     nicknames: set[str] = set()

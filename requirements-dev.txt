@@ -1,4 +1,11 @@
 # Dev/analysis-only dependencies (NOT installed in production).
-# Used to generate the reliability diagram (src.evaluate --calibration).
 # Install with: .venv/bin/pip install -r requirements-dev.txt
+
+# Reliability diagram (src.evaluate --calibration).
 matplotlib>=3.8
+
+# Candidate model compared against logreg during training (src.train,
+# src.evaluate). The shipped best_model.joblib is the logreg pipeline, so
+# the web app never imports xgboost — keeping it out of requirements.txt
+# saves ~57 MB of install and memory on the deployed instance.
+xgboost

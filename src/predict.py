@@ -6,8 +6,11 @@ and by how much.
 
 Usage (comma-separated so nicknames starting with '-' are safe):
     python -m src.predict \
-        --team-a 's1mple-_---,cigarette66,-ZeroSanity-,Ezio_-,_Ghani_' \
-        --team-b '--VerGiL-,-Murphy1337,ropz,-WARDELL,ZywOo'
+        --team-a 'name1,name2,name3,name4,name5' \
+        --team-b 'name6,name7,name8,name9,name10'
+
+Nicknames must be exact, currently-existing FACEIT accounts — the API 404s on
+anything else, so avoid hardcoding examples that can go inactive.
 """
 
 from __future__ import annotations

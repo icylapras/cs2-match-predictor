@@ -4,7 +4,7 @@ from django.shortcuts import render
 from src.faceit_api import FaceitError, random_ranked_players
 from src.features import FEATURE_KEYS
 
-from .forms import DEMO_NICKNAMES, TEAM_SIZE, MatchForm, field_names, random_lineup_initial
+from .forms import TEAM_SIZE, MatchForm, field_names
 from .models import PredictionLog
 from .services import get_metrics, run_prediction
 
@@ -65,8 +65,7 @@ def _result_context(team_a, team_b, prediction):
 def index(request):
     context = {
         "recent": PredictionLog.objects.all()[:5],
-        "demo_nicknames": DEMO_NICKNAMES,  # pool for the client-side shuffle button
-        "metrics": get_metrics(),  # track-record table (model vs FACEIT Elo)
+        "metrics": get_metrics(),  # headline accuracy / AUC / calibration panel
     }
 
     if request.method == "POST":
@@ -81,7 +80,9 @@ def index(request):
                 context["result"] = _result_context(team_a, team_b, prediction)
                 context["recent"] = PredictionLog.objects.all()[:5]
     else:
-        form = MatchForm(initial=random_lineup_initial())
+        # Start empty — the user types names, or fills them with
+        # "Random real players" (which returns genuinely active accounts).
+        form = MatchForm()
 
     context["form"] = form
     return render(request, "predictor/index.html", context)
